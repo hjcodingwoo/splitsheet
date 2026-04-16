@@ -339,6 +339,9 @@ function renderFxTab() {
         <div class="mono text-xs tracking-widest text-gray-400 mb-3">LEDGER — v1.0</div>
         <h1 class="serif text-5xl mb-3" style="color:var(--ink)">Split<span style="color:var(--accent)">Chinchin</span></h1>
         <p class="text-sm text-gray-500">Shared expenses. Zero fuss.<br>No accounts. No drama.</p>
+      <div class="mt-4">
+        <button class="btn btn-secondary w-full" onclick="showDirectory()">View all projects →</button>
+      </div>
       </div>
 
       <!-- Join existing project -->
@@ -381,6 +384,18 @@ function renderFxTab() {
         <button class="btn btn-primary w-full" onclick="createProject()">
           Create project →
         </button>
+      </div>
+    </div>
+  </div>
+<!-- ── DIRECTORY VIEW ──────────────────────────────── -->
+  <div id="view-directory" class="hidden min-h-screen px-4 py-12">
+    <div class="w-full max-w-lg mx-auto">
+      <div class="flex items-center gap-4 mb-8">
+        <button class="btn btn-ghost" onclick="hideDirectory()">← Back</button>
+        <h2 class="serif text-3xl">All Projects</h2>
+      </div>
+      <div id="directory-list" class="card">
+        <div class="text-sm text-gray-400 text-center py-8">Loading…</div>
       </div>
     </div>
   </div>
@@ -992,7 +1007,41 @@ function copyShareLink() {
     .then(() => toast("Share link copied!"))
     .catch(() => toast("Copy failed — copy the URL manually"));
 }
+// ── DIRECTORY ──────────────────────────────────────────────
+async function showDirectory() {
+  hide("view-landing");
+  show("view-directory");
+  showLoading("Loading projects…");
+  try {
+    const res = await api("getAllProjects");
+    const list = document.getElementById("directory-list");
+    if (!res.projects || !res.projects.length) {
+      list.innerHTML = `<div class="text-sm text-gray-400 text-center py-8">No projects yet.</div>`;
+      return;
+    }
+    list.innerHTML = res.projects.map(p => `
+      <div class="expense-row">
+        <div>
+          <div class="font-medium text-sm">${esc(p.name)}</div>
+          <div class="mono text-xs text-gray-400 mt-0.5">${esc(p.projectId)} · ${p.memberCount} member${p.memberCount !== 1 ? "s" : ""} · ${esc(p.defaultCurrency)}</div>
+        </div>
+        <button class="btn btn-secondary text-xs py-1.5 px-3" onclick="quickJoin('${esc(p.projectId)}', '${esc(p.name)}')">Join →</button>
+      </div>`).join("");
+  } catch(e) { toast(e.message); }
+  finally { hideLoading(); }
+}
 
+function hideDirectory() {
+  hide("view-directory");
+  show("view-landing");
+}
+
+function quickJoin(projectId, projectName) {
+  hideDirectory();
+  document.getElementById("join-id").value = projectId;
+  document.getElementById("join-name").focus();
+  toast("Enter your name to join " + projectName);
+}
 function goHome() {
   hide("view-project");
   show("view-landing");
