@@ -655,8 +655,8 @@ async function createProject() {
 
   showLoading("Creating project…");
   try {
-    const res = await api("createProject", {}, { name, currency });
-    const mem = await api("addMember", {}, { projectId: res.projectId, name: myName });
+    const res = await api("createProject", { name, currency });
+    const mem = await api("addMember", { projectId: res.projectId, name: myName });
     saveLocalMe(res.projectId, mem.memberId, myName);
     await loadProject(res.projectId);
     updateURL(res.projectId);
@@ -672,7 +672,7 @@ async function joinProject() {
 
   showLoading("Joining project…");
   try {
-    const mem = await api("addMember", {}, { projectId, name: myName });
+    const mem = await api("addMember", { projectId, name: myName });
     saveLocalMe(projectId, mem.memberId, myName);
     await loadProject(projectId);
     updateURL(projectId);
@@ -854,13 +854,17 @@ function openAddExpense() {
       ${esc(m.name)}
     </label>`).join("");
 
-  splitDiv.querySelectorAll(".check-item").forEach(el => {
+splitDiv.querySelectorAll(".check-item").forEach(el => {
     el.addEventListener("click", (e) => {
       e.preventDefault();
       el.classList.toggle("checked");
       el.querySelector("input").checked = el.classList.contains("checked");
     });
   });
+
+  showModal("modal-expense");
+  document.getElementById("exp-name").focus();
+}
 
 async function saveExpense() {
   const itemName     = v("exp-name").trim();
@@ -887,7 +891,7 @@ async function saveExpense() {
   }
 
   try {
-    await api("addExpense", {}, {
+    await api("addExpense", {
       projectId: state.projectId, itemName, amount, currency,
       payerId, payerName, splitBetween,
     });
@@ -912,7 +916,7 @@ async function deleteExpense(expenseId) {
   if (!confirm("Delete this expense?")) return;
   showLoading("Deleting…");
   try {
-    await api("deleteExpense", {}, { expenseId, projectId: state.projectId });
+    await api("deleteExpense", { expenseId, projectId: state.projectId });
     const expRes = await api("getExpenses", { projectId: state.projectId });
     state.expenses = expRes.expenses;
     renderExpenses();
