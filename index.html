@@ -40,26 +40,23 @@
   .tab:hover:not(.active){color:var(--ink);}
   .expense-row{padding:12px 0;border-bottom:1px solid var(--rule);display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start;animation:fadeSlide .25s ease;}
   .expense-row:last-child{border-bottom:none;}
-  .settle-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px dashed var(--rule);animation:fadeSlide .25s ease;}
+  .settle-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px dashed var(--rule);}
   .settle-row:last-child{border-bottom:none;}
   .settle-arrow{color:var(--accent);font-size:18px;flex-shrink:0;}
   #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 20px;border-radius:6px;font-size:13px;font-family:var(--mono);opacity:0;transition:opacity .2s;pointer-events:none;z-index:9999;white-space:nowrap;}
   #toast.show{opacity:1;}
-  .modal-bg{position:fixed;inset:0;background:rgba(26,26,24,.5);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px;animation:fadeIn .15s ease;}
-  .modal{background:var(--paper);border:1.5px solid var(--rule);border-radius:10px;padding:28px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;animation:slideUp .2s ease;}
+  .modal-bg{position:fixed;inset:0;background:rgba(26,26,24,.5);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px;}
+  .modal{background:var(--paper);border:1.5px solid var(--rule);border-radius:10px;padding:28px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;}
   .check-grid{display:flex;flex-wrap:wrap;gap:6px;}
   .check-item{display:flex;align-items:center;gap:6px;padding:6px 12px;border:1.5px solid var(--rule);border-radius:4px;cursor:pointer;font-size:13px;transition:all .12s;user-select:none;}
   .check-item.checked{background:var(--accent);border-color:var(--accent);color:#fff;}
   .check-item input{display:none;}
   .spin{width:16px;height:16px;border:2px solid #ffffff44;border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;display:inline-block;}
-  /* Total tab */
   .stat-card{background:rgba(255,255,255,.85);border:1.5px solid var(--rule);border-radius:10px;padding:20px;text-align:center;}
   .member-chip{padding:8px 16px;border-radius:20px;border:1.5px solid var(--rule);cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;background:rgba(255,255,255,.6);}
   .member-chip.active{background:var(--ink);color:#fff;border-color:var(--ink);}
-  .legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+  .legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;display:inline-block;}
   @keyframes fadeSlide{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
-  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
-  @keyframes slideUp{from{transform:translateY(12px);opacity:0;}to{transform:translateY(0);opacity:1;}}
   @keyframes spin{to{transform:rotate(360deg);}}
   @media(max-width:600px){.modal{padding:20px;}.card{padding:16px;}}
 </style>
@@ -74,22 +71,17 @@
       <div style="font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:#aaa;margin-bottom:12px">LEDGER — v1.0</div>
       <h1 style="font-family:var(--serif);font-size:3rem;color:var(--ink)">Split<span style="color:var(--accent)">Chinchin</span></h1>
       <p class="text-sm text-gray-500 mt-2">Shared expenses. Zero fuss.<br>No accounts. No drama.</p>
-      <div class="mt-4">
-        <button class="btn btn-secondary w-full" onclick="showDirectory()">View all projects →</button>
-      </div>
+      <div class="mt-4"><button class="btn btn-secondary w-full" onclick="showDirectory()">View all projects →</button></div>
     </div>
     <div class="card mb-4">
       <h2 style="font-family:var(--serif);font-size:1.25rem;margin-bottom:16px">Join a project</h2>
-      <div class="mb-3"><label>Project ID</label>
-        <input id="join-id" type="text" placeholder="Paste project ID or link" oninput="parseProjectInput(this.value)"></div>
-      <div class="mb-4"><label>Your name</label>
-        <input id="join-name" type="text" placeholder="How should we call you?"></div>
+      <div class="mb-3"><label>Project ID</label><input id="join-id" type="text" placeholder="Paste project ID or link" oninput="parseProjectInput(this.value)"></div>
+      <div class="mb-4"><label>Your name</label><input id="join-name" type="text" placeholder="How should we call you?"></div>
       <button class="btn btn-primary w-full" onclick="joinProject()">Enter project →</button>
     </div>
     <div class="card">
       <h2 style="font-family:var(--serif);font-size:1.25rem;margin-bottom:16px">Start a new project</h2>
-      <div class="mb-3"><label>Project name</label>
-        <input id="new-name" type="text" placeholder="e.g. Bali Trip 2025"></div>
+      <div class="mb-3"><label>Project name</label><input id="new-name" type="text" placeholder="e.g. Bali Trip 2025"></div>
       <div class="mb-4"><label>Default currency</label>
         <select id="new-currency">
           <option>USD</option><option>EUR</option><option>GBP</option><option>SGD</option>
@@ -97,8 +89,7 @@
           <option>CNY</option><option>THB</option><option>MYR</option><option>IDR</option>
           <option>INR</option><option>KRW</option><option>PHP</option>
         </select></div>
-      <div class="mb-4"><label>Your name</label>
-        <input id="creator-name" type="text" placeholder="You'll be the first member"></div>
+      <div class="mb-4"><label>Your name</label><input id="creator-name" type="text" placeholder="You'll be the first member"></div>
       <button class="btn btn-primary w-full" onclick="createProject()">Create project →</button>
     </div>
   </div>
@@ -111,9 +102,7 @@
       <button class="btn btn-ghost" onclick="hideDirectory()">← Back</button>
       <h2 style="font-family:var(--serif);font-size:1.75rem">All Projects</h2>
     </div>
-    <div id="directory-list" class="card">
-      <div class="text-sm text-gray-400 text-center py-8">Loading…</div>
-    </div>
+    <div id="directory-list" class="card"><div class="text-sm text-gray-400 text-center py-8">Loading…</div></div>
   </div>
 </div>
 
@@ -146,13 +135,9 @@
   <div id="tab-expenses" class="px-4 pb-20" style="max-width:720px;margin:0 auto;">
     <div class="flex items-center justify-between py-4">
       <div style="font-family:var(--mono);font-size:11px;color:#aaa" id="exp-count"></div>
-      <button class="btn btn-primary" onclick="openAddExpense()">
-        <span style="font-size:16px;line-height:1">+</span> Add expense
-      </button>
+      <button class="btn btn-primary" onclick="openAddExpense()"><span style="font-size:16px;line-height:1">+</span> Add expense</button>
     </div>
-    <div id="expense-list" class="card">
-      <div class="text-sm text-gray-400 text-center py-8">No expenses yet.</div>
-    </div>
+    <div id="expense-list" class="card"><div class="text-sm text-gray-400 text-center py-8">No expenses yet.</div></div>
   </div>
 
   <!-- Tab: Total -->
@@ -164,37 +149,30 @@
       </div>
       <div id="totals-missing-fx-badge" class="hidden pill" style="background:var(--accent-lt);color:var(--accent)">⚠️ Missing FX</div>
     </div>
-
-    <!-- Big total number -->
     <div class="stat-card mb-4">
       <div style="font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:#aaa;margin-bottom:8px">PROJECT TOTAL</div>
       <div id="totals-grand" style="font-family:var(--serif);font-size:2.5rem;color:var(--accent)">—</div>
     </div>
-
-    <!-- View toggle: All / per member -->
     <div class="flex gap-2 flex-wrap mb-4" id="member-chips">
       <button class="member-chip active" data-member="all" onclick="selectTotalsMember('all',this)">All members</button>
     </div>
-
-    <!-- Charts row -->
-    <div class="grid gap-4" style="grid-template-columns:1fr 1fr;" id="charts-grid">
-      <!-- Category pie -->
+    <div class="grid gap-4" style="grid-template-columns:1fr 1fr;">
       <div class="card" style="padding:20px">
         <div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:#aaa;margin-bottom:16px">BY CATEGORY</div>
         <canvas id="pie-category" width="200" height="200" style="display:block;margin:0 auto 16px"></canvas>
         <div id="legend-category"></div>
       </div>
-      <!-- Person bar (only shown for All) -->
       <div class="card" style="padding:20px" id="card-person">
-        <div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:#aaa;margin-bottom:16px">BY PERSON (PAID)</div>
+        <div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:#aaa;margin-bottom:16px">BY PERSON (SPENT)</div>
         <canvas id="pie-person" width="200" height="200" style="display:block;margin:0 auto 16px"></canvas>
         <div id="legend-person"></div>
       </div>
     </div>
-
-    <!-- Detail table -->
-    <div class="card mt-4" id="totals-detail">
-      <div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:#aaa;margin-bottom:12px">BREAKDOWN</div>
+    <div class="card mt-4">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:#aaa">BREAKDOWN</div>
+        <div style="font-size:11px;color:#aaa">Tap category to expand ▼</div>
+      </div>
       <div id="totals-rows"></div>
     </div>
   </div>
@@ -205,9 +183,7 @@
       <div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:#aaa;margin-bottom:4px">NET BALANCES</div>
       <div class="text-xs text-gray-400">Positive = owed money · Negative = owes money</div>
     </div>
-    <div id="balance-list" class="card">
-      <div class="text-sm text-gray-400 text-center py-8">Add expenses to see balances.</div>
-    </div>
+    <div id="balance-list" class="card"><div class="text-sm text-gray-400 text-center py-8">Add expenses to see balances.</div></div>
   </div>
 
   <!-- Tab: Settle Up -->
@@ -220,9 +196,7 @@
       <div class="text-xs font-medium" style="color:var(--accent)">⚠️ Missing FX rates — go to FX Rates tab</div>
       <div id="settle-missing-list" style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-top:4px"></div>
     </div>
-    <div id="settle-list" class="card">
-      <div class="text-sm text-gray-400 text-center py-8">Add expenses to calculate settlement.</div>
-    </div>
+    <div id="settle-list" class="card"><div class="text-sm text-gray-400 text-center py-8">Add expenses to calculate settlement.</div></div>
   </div>
 
   <!-- Tab: FX Rates -->
@@ -247,9 +221,7 @@
         <button class="btn btn-primary" onclick="saveFxRate()">Save rate</button>
       </div>
     </div>
-    <div id="fx-rates-list" class="card">
-      <div class="text-sm text-gray-400 text-center py-6">No FX rates set yet.</div>
-    </div>
+    <div id="fx-rates-list" class="card"><div class="text-sm text-gray-400 text-center py-6">No FX rates set yet.</div></div>
   </div>
 </div>
 
@@ -258,16 +230,14 @@
   <div class="modal">
     <h2 style="font-family:var(--serif);font-size:1.5rem;margin-bottom:20px">New expense</h2>
     <div class="grid gap-4">
-      <div><label>Item name</label>
-        <input id="exp-name" type="text" placeholder="Dinner, taxi, hotel…"></div>
+      <div><label>Item name</label><input id="exp-name" type="text" placeholder="Dinner, taxi, hotel…"></div>
       <div><label>Category</label>
         <div class="flex gap-2">
           <select id="exp-category" style="flex:1"><option value="">— None —</option></select>
           <button class="btn btn-secondary" style="white-space:nowrap;padding:8px 12px;font-size:12px" onclick="openAddCategory()">+ New</button>
         </div></div>
       <div class="grid grid-cols-2 gap-3">
-        <div><label>Amount</label>
-          <input id="exp-amount" type="number" min="0" step="0.01" placeholder="0.00"></div>
+        <div><label>Amount</label><input id="exp-amount" type="number" min="0" step="0.01" placeholder="0.00"></div>
         <div><label>Currency</label>
           <select id="exp-currency" onchange="onExpCurrencyChange(this.value)">
             <option>USD</option><option>EUR</option><option>GBP</option><option>SGD</option>
@@ -315,17 +285,13 @@
 
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbz7r7R0tAxzgDT7liIwxew6-3FpHmcsv9CRmBoNtJN6qSs7_0Ae_GwP74O3s08tcOcCEw/exec";
-
-// Pie chart palette
 const PIE_COLORS = ["#c1440e","#2d6a4f","#4a7fbd","#b5860d","#7b4fa6","#c0704a","#3d8c6e","#6b8cba","#d4a520","#a06bc0","#e8856a","#56b08a"];
 
 let state = {
   projectId:null, project:null, members:[], expenses:[],
-  fxRates:{}, categories:[], me:null, currency:"USD",
-  totalsFilter:"all",
+  fxRates:{}, categories:[], me:null, currency:"USD", totalsFilter:"all",
 };
 
-// ── INIT ──────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   const p = new URLSearchParams(location.search).get("p");
   if (p) { document.getElementById("join-id").value = p; document.getElementById("join-name").focus(); }
@@ -335,7 +301,6 @@ function parseProjectInput(val) {
   try { const u = new URL(val); const p = u.searchParams.get("p"); if (p) document.getElementById("join-id").value = p; } catch {}
 }
 
-// ── API ───────────────────────────────────────────────────
 function api(action, params = {}) {
   return new Promise((resolve, reject) => {
     const all = { action, ...params };
@@ -356,38 +321,47 @@ function api(action, params = {}) {
   });
 }
 
-// ── FX HELPER ─────────────────────────────────────────────
-// Convert an expense amount to base currency. Returns null if rate missing.
 function toBase(amount, ccy) {
   const base = state.currency;
+  ccy = (ccy || base).toUpperCase();
   if (ccy === base) return parseFloat(amount) || 0;
-  const rate = state.fxRates[ccy.toUpperCase()];
-  if (rate === undefined || rate === null) return null; // unknown
+  const rate = state.fxRates[ccy];
+  if (rate === undefined || rate === null) return null;
   return (parseFloat(amount) || 0) * rate;
 }
 
-// Build totals object from expenses, filtered by payerId (or all)
+function cleanCat(raw) {
+  const s = String(raw || "").trim();
+  return (s && s !== "0") ? s : "Uncategorised";
+}
+
 function buildTotals(filterMemberId) {
-  const byCategory = {};
-  const byPerson   = {};
-  let   grandTotal = 0;
-  let   hasMissing = false;
+  const byCategory = {}, byPerson = {};
+  let grandTotal = 0, hasMissing = false;
 
   state.expenses.forEach(exp => {
-    if (filterMemberId && filterMemberId !== "all" && exp.payerId !== filterMemberId) return;
     const converted = toBase(exp.amount, exp.currency || state.currency);
     if (converted === null) { hasMissing = true; return; }
-    const amt = converted;
-    grandTotal += amt;
-    const cat = (exp.category && exp.category.toString().trim()) ? exp.category : "Uncategorised";
-    byCategory[cat] = (byCategory[cat] || 0) + amt;
-    byPerson[exp.payerName] = (byPerson[exp.payerName] || 0) + amt;
+    const cat   = cleanCat(exp.category);
+    const split = (Array.isArray(exp.splitBetween)
+      ? exp.splitBetween : String(exp.splitBetween).split(",")).filter(s => s);
+
+    if (!filterMemberId || filterMemberId === "all") {
+      grandTotal += converted;
+      byCategory[cat] = (byCategory[cat] || 0) + converted;
+      byPerson[exp.payerName] = (byPerson[exp.payerName] || 0) + converted;
+    } else {
+      if (!split.includes(filterMemberId)) return;
+      const share = converted / split.length;
+      grandTotal += share;
+      byCategory[cat] = (byCategory[cat] || 0) + share;
+      byPerson[exp.payerName] = (byPerson[exp.payerName] || 0) + share;
+    }
   });
 
   return { byCategory, byPerson, grandTotal, hasMissing };
 }
 
-// ── PROJECT CREATE / JOIN ─────────────────────────────────
 async function createProject() {
   const name = v("new-name").trim(), currency = v("new-currency"), myName = v("creator-name").trim();
   if (!name)   return toast("Enter a project name");
@@ -439,12 +413,10 @@ function renderProject() {
   renderExpenses();
 }
 
-// ── EXPENSES TAB ──────────────────────────────────────────
 function renderExpenses() {
   const { expenses, members } = state;
   const list = document.getElementById("expense-list");
-  const cnt  = document.getElementById("exp-count");
-  cnt.textContent = `${expenses.length} expense${expenses.length !== 1 ? "s" : ""}`;
+  document.getElementById("exp-count").textContent = `${expenses.length} expense${expenses.length !== 1 ? "s" : ""}`;
 
   if (!expenses.length) {
     list.innerHTML = `<div class="text-sm text-gray-400 text-center py-8">No expenses yet. Add the first one!</div>`;
@@ -457,22 +429,18 @@ function renderExpenses() {
 
   list.innerHTML = sorted.map(exp => {
     const splitNames = exp.splitBetween.map(id => memberMap[id] || id).join(", ");
-    const date = new Date(exp.createdAt).toLocaleDateString("en-GB", { day:"numeric", month:"short" });
-    const isMine = state.me && exp.payerId === state.me.memberId;
-    const catPill = (exp.category && exp.category.toString().trim())
-      ? `<span class="pill pill-currency" style="margin-left:4px">${esc(exp.category)}</span>` : "";
-    // Show converted amount if foreign currency
-    const baseAmt = toBase(exp.amount, exp.currency || state.currency);
+    const date    = new Date(exp.createdAt).toLocaleDateString("en-GB", { day:"numeric", month:"short" });
+    const isMine  = state.me && exp.payerId === state.me.memberId;
+    const catPill = cleanCat(exp.category) !== "Uncategorised"
+      ? `<span class="pill pill-currency" style="margin-left:4px">${esc(cleanCat(exp.category))}</span>` : "";
+    const baseAmt  = toBase(exp.amount, exp.currency || state.currency);
     const convNote = (exp.currency && exp.currency !== state.currency && baseAmt !== null)
       ? `<span style="font-family:var(--mono);font-size:10px;color:#aaa;display:block">≈ ${formatAmt(baseAmt)} ${state.currency}</span>` : "";
     return `
       <div class="expense-row">
         <div>
           <div class="font-medium text-sm">${esc(exp.itemName)} ${catPill}</div>
-          <div class="text-xs text-gray-400 mt-0.5">
-            Paid by <strong>${esc(exp.payerName)}</strong>${isMine ? ' <span style="color:var(--accent)">· you</span>' : ''}
-            · Split: ${esc(splitNames)}
-          </div>
+          <div class="text-xs text-gray-400 mt-0.5">Paid by <strong>${esc(exp.payerName)}</strong>${isMine ? ' <span style="color:var(--accent)">· you</span>' : ''} · Split: ${esc(splitNames)}</div>
           <div style="font-family:var(--mono);font-size:10px;color:#bbb;margin-top:2px">${date}</div>
         </div>
         <div class="flex items-start gap-2">
@@ -489,19 +457,15 @@ function renderExpenses() {
   }).join("");
 }
 
-// ── TOTAL TAB ─────────────────────────────────────────────
 function renderTotalsTab() {
-  const ccy = state.currency;
-  document.getElementById("totals-ccy-label").textContent = ccy;
-
-  // Build member chips
+  document.getElementById("totals-ccy-label").textContent = state.currency;
   const chips = document.getElementById("member-chips");
-  chips.innerHTML = `<button class="member-chip ${state.totalsFilter === 'all' ? 'active' : ''}" data-member="all" onclick="selectTotalsMember('all',this)">All members</button>` +
-    state.members.map(m => `
-      <button class="member-chip ${state.totalsFilter === m.memberId ? 'active' : ''}" data-member="${m.memberId}" onclick="selectTotalsMember('${m.memberId}',this)">
-        ${esc(m.name)}
-      </button>`).join("");
-
+  chips.innerHTML =
+    `<button class="member-chip ${state.totalsFilter==='all'?'active':''}" onclick="selectTotalsMember('all',this)">All members</button>` +
+    state.members.map(m =>
+      `<button class="member-chip ${state.totalsFilter===m.memberId?'active':''}" onclick="selectTotalsMember('${m.memberId}',this)">${esc(m.name)}</button>`
+    ).join("");
+  document.getElementById("card-person").style.display = state.totalsFilter === "all" ? "" : "none";
   renderTotalsCharts(state.totalsFilter);
 }
 
@@ -509,7 +473,6 @@ function selectTotalsMember(memberId, btn) {
   state.totalsFilter = memberId;
   document.querySelectorAll(".member-chip").forEach(c => c.classList.remove("active"));
   btn.classList.add("active");
-  // Hide person chart when viewing individual
   document.getElementById("card-person").style.display = memberId === "all" ? "" : "none";
   renderTotalsCharts(memberId);
 }
@@ -517,79 +480,104 @@ function selectTotalsMember(memberId, btn) {
 function renderTotalsCharts(filterMemberId) {
   const { byCategory, byPerson, grandTotal, hasMissing } = buildTotals(filterMemberId);
   const ccy = state.currency;
-
-  // Missing FX badge
-  const badge = document.getElementById("totals-missing-fx-badge");
-  badge.classList.toggle("hidden", !hasMissing);
-
-  // Grand total
+  document.getElementById("totals-missing-fx-badge").classList.toggle("hidden", !hasMissing);
   document.getElementById("totals-grand").textContent = `${formatAmt(grandTotal)} ${ccy}`;
+  drawPie("pie-category", byCategory, "legend-category");
+  if (filterMemberId === "all") drawPie("pie-person", byPerson, "legend-person");
 
-  // Draw pies
-  drawPie("pie-category", byCategory, "legend-category", ccy);
-  if (filterMemberId === "all") drawPie("pie-person", byPerson, "legend-person", ccy);
-
-  // Detail rows
+  // Breakdown with expandable items
   const catEntries = Object.entries(byCategory).sort(([,a],[,b]) => b - a);
-  document.getElementById("totals-rows").innerHTML = catEntries.length ? catEntries.map(([cat, amt], i) => {
-    const pct = grandTotal > 0 ? (amt / grandTotal * 100).toFixed(1) : "0.0";
-    return `
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--rule)">
-        <div class="legend-dot" style="background:${PIE_COLORS[i % PIE_COLORS.length]}"></div>
-        <div style="flex:1;font-size:13px">${esc(cat)}</div>
-        <div style="font-family:var(--mono);font-size:12px;color:#888">${pct}%</div>
-        <div style="font-family:var(--mono);font-size:13px;font-weight:500">${formatAmt(amt)} ${ccy}</div>
-      </div>`;
-  }).join("") : `<div class="text-sm text-gray-400 text-center py-4">No data.</div>`;
-}
-
-function drawPie(canvasId, dataObj, legendId, ccy) {
-  const canvas = document.getElementById(canvasId);
-  const ctx    = canvas.getContext("2d");
-  const W = canvas.width, H = canvas.height, cx = W/2, cy = H/2, r = Math.min(W,H)/2 - 8;
-
-  ctx.clearRect(0, 0, W, H);
-
-  const entries = Object.entries(dataObj).filter(([,v]) => v > 0).sort(([,a],[,b]) => b-a);
-  const total   = entries.reduce((s,[,v]) => s+v, 0);
-
-  if (!entries.length || total === 0) {
-    ctx.fillStyle = "#e8e4dc";
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+  if (!catEntries.length) {
+    document.getElementById("totals-rows").innerHTML = `<div class="text-sm text-gray-400 text-center py-4">No data.</div>`;
     return;
   }
 
-  let angle = -Math.PI / 2;
-  entries.forEach(([, val], i) => {
-    const slice = (val / total) * Math.PI * 2;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, r, angle, angle + slice);
-    ctx.closePath();
-    ctx.fillStyle = PIE_COLORS[i % PIE_COLORS.length];
-    ctx.fill();
-    ctx.strokeStyle = "rgba(245,240,232,.6)";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    angle += slice;
+  // Group expenses per category
+  const expByCat = {};
+  state.expenses.forEach(exp => {
+    const cat   = cleanCat(exp.category);
+    const split = (Array.isArray(exp.splitBetween)
+      ? exp.splitBetween : String(exp.splitBetween).split(",")).filter(s => s);
+    if (filterMemberId && filterMemberId !== "all" && !split.includes(filterMemberId)) return;
+    if (!expByCat[cat]) expByCat[cat] = [];
+    expByCat[cat].push(exp);
   });
 
-  // Donut hole
-  ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.52, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(245,240,232,.95)";
-  ctx.fill();
+  document.getElementById("totals-rows").innerHTML = catEntries.map(([cat, amt], i) => {
+    const pct   = grandTotal > 0 ? (amt / grandTotal * 100).toFixed(1) : "0.0";
+    const color = PIE_COLORS[i % PIE_COLORS.length];
+    const items = (expByCat[cat] || []).sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
 
-  // Legend
-  document.getElementById(legendId).innerHTML = entries.map(([label, val], i) => `
+    const itemRows = items.map(exp => {
+      const split = (Array.isArray(exp.splitBetween)
+        ? exp.splitBetween : String(exp.splitBetween).split(",")).filter(s => s);
+      const base  = toBase(exp.amount, exp.currency || state.currency);
+      const share = (filterMemberId && filterMemberId !== "all" && base !== null)
+        ? base / split.length : base;
+      const date  = new Date(exp.createdAt).toLocaleDateString("en-GB", { day:"numeric", month:"short" });
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0 7px 20px;border-bottom:1px dashed var(--rule);font-size:12px;">
+          <div>
+            <span style="color:var(--ink)">${esc(exp.itemName)}</span>
+            <span style="color:#aaa;font-size:11px;margin-left:6px">${date} · ${esc(exp.payerName)}</span>
+          </div>
+          <span style="font-family:var(--mono);font-size:12px;color:#555;white-space:nowrap;margin-left:12px">${share !== null ? formatAmt(share) : "?"} ${ccy}</span>
+        </div>`;
+    }).join("");
+
+    return `
+      <div style="border-bottom:1px solid var(--rule)">
+        <div style="display:flex;align-items:center;gap:10px;padding:11px 0;cursor:pointer;user-select:none" onclick="toggleCatRow('catrow-${i}','chevron-${i}')">
+          <div class="legend-dot" style="background:${color}"></div>
+          <div style="flex:1;font-size:13px;font-weight:500">${esc(cat)}</div>
+          <div style="font-family:var(--mono);font-size:12px;color:#888">${pct}%</div>
+          <div style="font-family:var(--mono);font-size:13px;font-weight:500;margin-right:6px">${formatAmt(amt)} ${ccy}</div>
+          <span id="chevron-${i}" style="color:#aaa;font-size:11px;display:inline-block;transition:transform .2s">▼</span>
+        </div>
+        <div id="catrow-${i}" style="display:none">${itemRows}</div>
+      </div>`;
+  }).join("");
+}
+
+function toggleCatRow(rowId, chevId) {
+  const el  = document.getElementById(rowId);
+  const chv = document.getElementById(chevId);
+  const open = el.style.display === "none";
+  el.style.display  = open ? "block" : "none";
+  chv.style.transform = open ? "rotate(180deg)" : "";
+}
+
+function drawPie(canvasId, dataObj, legendId) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height, cx = W/2, cy = H/2, r = Math.min(W,H)/2 - 8;
+  ctx.clearRect(0, 0, W, H);
+  const entries = Object.entries(dataObj).filter(([,v]) => v > 0).sort(([,a],[,b]) => b-a);
+  const total   = entries.reduce((s,[,v]) => s+v, 0);
+  if (!entries.length || total === 0) {
+    ctx.fillStyle = "#e8e4dc"; ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+    document.getElementById(legendId).innerHTML = "";
+    return;
+  }
+  let angle = -Math.PI/2;
+  entries.forEach(([,val], i) => {
+    const slice = (val/total)*Math.PI*2;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,angle,angle+slice); ctx.closePath();
+    ctx.fillStyle = PIE_COLORS[i % PIE_COLORS.length]; ctx.fill();
+    ctx.strokeStyle = "rgba(245,240,232,.6)"; ctx.lineWidth = 2; ctx.stroke();
+    angle += slice;
+  });
+  ctx.beginPath(); ctx.arc(cx,cy,r*0.52,0,Math.PI*2);
+  ctx.fillStyle = "rgba(245,240,232,.95)"; ctx.fill();
+  document.getElementById(legendId).innerHTML = entries.map(([label,val],i) => `
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-      <div class="legend-dot" style="background:${PIE_COLORS[i % PIE_COLORS.length]}"></div>
+      <div class="legend-dot" style="background:${PIE_COLORS[i%PIE_COLORS.length]}"></div>
       <div style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(label)}</div>
       <div style="font-family:var(--mono);font-size:11px;color:#888">${formatAmt(val)}</div>
     </div>`).join("");
 }
 
-// ── BALANCES & SETTLE ─────────────────────────────────────
 async function renderBalancesAndSettle() {
   showLoading("Calculating…");
   try {
@@ -603,18 +591,17 @@ function renderBalances(balances, baseCcy, missingFx) {
   const list = document.getElementById("balance-list");
   if (!balances || !balances.length) { list.innerHTML = `<div class="text-sm text-gray-400 text-center py-8">No data yet.</div>`; return; }
   if (missingFx && missingFx.length) toast("⚠️ Missing FX: " + missingFx.join(", "));
-  list.innerHTML = [...balances].sort((a,b) => b.net - a.net).map(b => {
+  list.innerHTML = [...balances].sort((a,b) => b.net-a.net).map(b => {
     const cls = b.net > 0 ? "pill-positive" : b.net < 0 ? "pill-negative" : "pill-currency";
     return `<div class="expense-row"><div class="font-medium text-sm">${esc(b.name)}</div>
-      <span class="pill ${cls} text-sm">${b.net > 0 ? "+" : ""}${formatAmt(b.net)} ${baseCcy || state.currency}</span></div>`;
+      <span class="pill ${cls} text-sm">${b.net>0?"+":""}${formatAmt(b.net)} ${baseCcy||state.currency}</span></div>`;
   }).join("");
 }
 
 function renderSettle(transactions, baseCcy, missingFx) {
-  const warn = document.getElementById("settle-missing-fx");
   document.getElementById("settle-missing-list").textContent =
     missingFx && missingFx.length ? "No rate set for: " + missingFx.join(", ") : "";
-  warn.classList.toggle("hidden", !missingFx || !missingFx.length);
+  document.getElementById("settle-missing-fx").classList.toggle("hidden", !missingFx || !missingFx.length);
   const ccy  = baseCcy || state.currency;
   const list = document.getElementById("settle-list");
   if (!transactions || !transactions.length) {
@@ -630,7 +617,6 @@ function renderSettle(transactions, baseCcy, missingFx) {
     </div>`).join("");
 }
 
-// ── FX RATES ─────────────────────────────────────────────
 function onExpCurrencyChange(ccy) {
   const row = document.getElementById("fx-rate-row"), base = state.currency;
   if (ccy === base) { row.classList.add("hidden"); return; }
@@ -648,7 +634,7 @@ function updateFxInputLabel() {
 }
 
 async function saveFxRate() {
-  const ccy = document.getElementById("fx-ccy-input").value;
+  const ccy  = document.getElementById("fx-ccy-input").value;
   const rate = parseFloat(document.getElementById("fx-rate-input").value);
   if (!rate || rate <= 0) return toast("Enter a valid rate");
   if (ccy === state.currency) return toast("That's already the base currency");
@@ -679,7 +665,6 @@ function renderFxTab() {
     </div>`).join("") : `<div class="text-sm text-gray-400 text-center py-6">No FX rates set yet.</div>`;
 }
 
-// ── CATEGORIES ───────────────────────────────────────────
 async function openAddCategory() {
   const name = prompt("New category name:");
   if (!name || !name.trim()) return;
@@ -694,7 +679,6 @@ async function openAddCategory() {
   } catch(e) { toast(e.message); }
 }
 
-// ── EXPENSE MODAL ────────────────────────────────────────
 function openAddExpense() {
   if (!state.members.length) return toast("No members yet");
   const payerSel = document.getElementById("exp-payer");
@@ -718,11 +702,11 @@ function openAddExpense() {
 }
 
 async function saveExpense() {
-  const itemName = v("exp-name").trim(), amount = parseFloat(v("exp-amount")),
-        currency = v("exp-currency"), category = v("exp-category"),
-        payerSel = document.getElementById("exp-payer"),
-        payerId  = payerSel.value,
-        payerName = payerSel.options[payerSel.selectedIndex].text,
+  const itemName    = v("exp-name").trim(), amount = parseFloat(v("exp-amount")),
+        currency    = v("exp-currency"), category = v("exp-category"),
+        payerSel    = document.getElementById("exp-payer"),
+        payerId     = payerSel.value,
+        payerName   = payerSel.options[payerSel.selectedIndex].text,
         splitBetween = [...document.querySelectorAll("#exp-split .check-item.checked")].map(el => el.dataset.id);
   if (!itemName)              return toast("Enter an item name");
   if (!amount || amount <= 0) return toast("Enter a valid amount");
@@ -759,7 +743,6 @@ async function deleteExpense(expenseId) {
 function selectAllSplit() { document.querySelectorAll("#exp-split .check-item").forEach(el => { el.classList.add("checked"); el.querySelector("input").checked = true; }); }
 function clearSplit()     { document.querySelectorAll("#exp-split .check-item").forEach(el => { el.classList.remove("checked"); el.querySelector("input").checked = false; }); }
 
-// ── TABS ─────────────────────────────────────────────────
 function switchTab(name, btn) {
   ["expenses","totals","balances","settle","fx"].forEach(t => {
     document.getElementById("tab-"+t).classList.add("hidden");
@@ -772,11 +755,10 @@ function switchTab(name, btn) {
   if (name === "fx")       renderFxTab();
 }
 
-// ── DIRECTORY ────────────────────────────────────────────
 async function showDirectory() {
   hide("view-landing"); show("view-directory"); showLoading("Loading projects…");
   try {
-    const res = await api("getAllProjects");
+    const res  = await api("getAllProjects");
     const list = document.getElementById("directory-list");
     if (!res.projects || !res.projects.length) { list.innerHTML = `<div class="text-sm text-gray-400 text-center py-8">No projects yet.</div>`; return; }
     list.innerHTML = res.projects.map(p => `
@@ -784,14 +766,11 @@ async function showDirectory() {
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <div>
             <div class="font-medium text-sm">${esc(p.name)}</div>
-            <div style="font-family:var(--mono);font-size:11px;color:#aaa">${esc(p.defaultCurrency)} · ${p.members.length} member${p.members.length !== 1 ? "s" : ""}</div>
+            <div style="font-family:var(--mono);font-size:11px;color:#aaa">${esc(p.defaultCurrency)} · ${p.members.length} member${p.members.length!==1?"s":""}</div>
           </div>
         </div>
         <div class="check-grid">
-          ${p.members.map(m => `
-            <label class="check-item" data-project="${esc(p.projectId)}" data-member="${esc(m.memberId)}" data-name="${esc(m.name)}" onclick="selectDirectoryMember(this)">
-              ${esc(m.name)}
-            </label>`).join("")}
+          ${p.members.map(m => `<label class="check-item" data-project="${esc(p.projectId)}" data-member="${esc(m.memberId)}" data-name="${esc(m.name)}" onclick="selectDirectoryMember(this)">${esc(m.name)}</label>`).join("")}
           <label class="check-item" style="font-style:italic;color:#aaa" onclick="newMemberJoin('${esc(p.projectId)}','${esc(p.name)}')">+ New member</label>
         </div>
       </div>`).join("");
@@ -815,7 +794,6 @@ function newMemberJoin(projectId, projectName) {
   toast("Enter your name to join " + projectName);
 }
 
-// ── UTILS ────────────────────────────────────────────────
 function v(id) { return document.getElementById(id).value; }
 function show(id) { document.getElementById(id).classList.remove("hidden"); }
 function hide(id) { document.getElementById(id).classList.add("hidden"); }
@@ -826,19 +804,19 @@ function showLoading(msg) { document.getElementById("loading-msg").textContent =
 function hideLoading() { document.getElementById("loading").style.display = "none"; }
 let _tt;
 function toast(msg) { const el = document.getElementById("toast"); el.textContent = msg; el.classList.add("show"); clearTimeout(_tt); _tt = setTimeout(() => el.classList.remove("show"), 2800); }
-function formatAmt(n) { return (parseFloat(n)||0).toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 }); }
+function formatAmt(n) { return (parseFloat(n)||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function esc(s) { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
-function updateURL(projectId) { const u = new URL(location.href); u.searchParams.set("p", projectId); history.replaceState({}, "", u.toString()); }
+function updateURL(projectId) { const u = new URL(location.href); u.searchParams.set("p",projectId); history.replaceState({},"",u.toString()); }
 function copyShareLink() {
-  const u = new URL(location.href); u.searchParams.set("p", state.projectId);
-  navigator.clipboard.writeText(u.toString()).then(() => toast("Link copied!")).catch(() => toast("Copy the URL manually"));
+  const u = new URL(location.href); u.searchParams.set("p",state.projectId);
+  navigator.clipboard.writeText(u.toString()).then(()=>toast("Link copied!")).catch(()=>toast("Copy the URL manually"));
 }
 function goHome() {
-  hide("view-project"); show("view-landing"); history.replaceState({}, "", location.pathname);
-  state = { projectId:null, project:null, members:[], expenses:[], fxRates:{}, categories:[], me:null, currency:"USD", totalsFilter:"all" };
+  hide("view-project"); show("view-landing"); history.replaceState({},"",location.pathname);
+  state = { projectId:null,project:null,members:[],expenses:[],fxRates:{},categories:[],me:null,currency:"USD",totalsFilter:"all" };
 }
 function saveLocalMe(projectId, memberId, name) {
-  try { localStorage.setItem("ss_me_"+projectId, JSON.stringify({ memberId, name })); } catch {}
+  try { localStorage.setItem("ss_me_"+projectId, JSON.stringify({memberId,name})); } catch {}
   state.me = { memberId, name };
 }
 function loadLocalMe(projectId) { try { return JSON.parse(localStorage.getItem("ss_me_"+projectId)); } catch { return null; } }
