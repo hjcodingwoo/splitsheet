@@ -154,7 +154,7 @@
       <div id="totals-grand" style="font-family:var(--serif);font-size:2.5rem;color:var(--accent)">—</div>
     </div>
     <div class="flex gap-2 flex-wrap mb-4" id="member-chips">
-      <button class="member-chip active" data-member="all" onclick="selectTotalsMember('all',this)">All members</button>
+      <button class="member-chip active" onclick="selectTotalsMember('all',this)">All members</button>
     </div>
     <div class="grid gap-4" style="grid-template-columns:1fr 1fr;">
       <div class="card" style="padding:20px">
@@ -301,7 +301,12 @@ function parseProjectInput(val) {
   try { const u = new URL(val); const p = u.searchParams.get("p"); if (p) document.getElementById("join-id").value = p; } catch {}
 }
 
-const cb = "_cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);    all.callback = cb;
+function api(action, params = {}) {
+  return new Promise((resolve, reject) => {
+    const all = { action, ...params };
+    if (Array.isArray(all.splitBetween)) all.splitBetween = all.splitBetween.join(",");
+    const cb = "_cb_" + Date.now();
+    all.callback = cb;
     const url = new URL(API_URL);
     for (const [k,v] of Object.entries(all)) if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
     window[cb] = (data) => {
@@ -333,14 +338,12 @@ function cleanCat(raw) {
 function buildTotals(filterMemberId) {
   const byCategory = {}, byPerson = {};
   let grandTotal = 0, hasMissing = false;
-
   state.expenses.forEach(exp => {
     const converted = toBase(exp.amount, exp.currency || state.currency);
     if (converted === null) { hasMissing = true; return; }
     const cat   = cleanCat(exp.category);
     const split = (Array.isArray(exp.splitBetween)
       ? exp.splitBetween : String(exp.splitBetween).split(",")).filter(s => s);
-
     if (!filterMemberId || filterMemberId === "all") {
       grandTotal += converted;
       byCategory[cat] = (byCategory[cat] || 0) + converted;
@@ -353,7 +356,6 @@ function buildTotals(filterMemberId) {
       byPerson[exp.payerName] = (byPerson[exp.payerName] || 0) + share;
     }
   });
-
   return { byCategory, byPerson, grandTotal, hasMissing };
 }
 
@@ -366,7 +368,8 @@ async function createProject() {
     const res = await api("createProject", { name, currency });
     const mem = await api("addMember", { projectId: res.projectId, name: myName });
     saveLocalMe(res.projectId, mem.memberId, myName);
-    await loadProject(res.projectId); updateURL(res.projectId);
+    await loadProject(res.projectId);
+    updateURL(res.projectId);
   } catch(e) { toast(e.message); } finally { hideLoading(); }
 }
 
@@ -378,16 +381,16 @@ async function joinProject() {
   try {
     const mem = await api("addMember", { projectId, name: myName });
     saveLocalMe(projectId, mem.memberId, myName);
-    await loadProject(projectId); updateURL(projectId);
+    await loadProject(projectId);
+    updateURL(projectId);
   } catch(e) { toast(e.message); } finally { hideLoading(); }
 }
 
 async function loadProject(projectId) {
   showLoading("Loading project…");
   try {
-    const [projRes, expRes] = await Promise.all([
-      api("getProject", { projectId }), api("getExpenses", { projectId })
-    ]);
+    const projRes = await api("getProject", { projectId });
+    const expRes  = await api("getExpenses", { projectId });
     state.projectId  = projectId;
     state.project    = projRes.project;
     state.members    = projRes.members;
@@ -412,22 +415,20 @@ function renderExpenses() {
   const { expenses, members } = state;
   const list = document.getElementById("expense-list");
   document.getElementById("exp-count").textContent = `${expenses.length} expense${expenses.length !== 1 ? "s" : ""}`;
-
   if (!expenses.length) {
     list.innerHTML = `<div class="text-sm text-gray-400 text-center py-8">No expenses yet. Add the first one!</div>`;
     return;
   }
-
   const memberMap = {};
   members.forEach(m => memberMap[m.memberId] = m.name);
   const sorted = [...expenses].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
-
   list.innerHTML = sorted.map(exp => {
     const splitNames = exp.splitBetween.map(id => memberMap[id] || id).join(", ");
     const date    = new Date(exp.createdAt).toLocaleDateString("en-GB", { day:"numeric", month:"short" });
     const isMine  = state.me && exp.payerId === state.me.memberId;
-    const catPill = cleanCat(exp.category) !== "Uncategorised"
-      ? `<span class="pill pill-currency" style="margin-left:4px">${esc(cleanCat(exp.category))}</span>` : "";
+    const cat     = cleanCat(exp.category);
+    const catPill = cat !== "Uncategorised"
+      ? `<span class="pill pill-currency" style="margin-left:4px">${esc(cat)}</span>` : "";
     const baseAmt  = toBase(exp.amount, exp.currency || state.currency);
     const convNote = (exp.currency && exp.currency !== state.currency && baseAmt !== null)
       ? `<span style="font-family:var(--mono);font-size:10px;color:#aaa;display:block">≈ ${formatAmt(baseAmt)} ${state.currency}</span>` : "";
@@ -435,7 +436,7 @@ function renderExpenses() {
       <div class="expense-row">
         <div>
           <div class="font-medium text-sm">${esc(exp.itemName)} ${catPill}</div>
-          <div class="text-xs text-gray-400 mt-0.5">Paid by <strong>${esc(exp.payerName)}</strong>${isMine ? ' <span style="color:var(--accent)">· you</span>' : ''} · Split: ${esc(splitNames)}</div>
+          <div class="text-xs text-gray-400 mt-0.5">Paid by <strong>${esc(exp.payerName)}</strong>${isMine?' <span style="color:var(--accent)">· you</span>':''} · Split: ${esc(splitNames)}</div>
           <div style="font-family:var(--mono);font-size:10px;color:#bbb;margin-top:2px">${date}</div>
         </div>
         <div class="flex items-start gap-2">
@@ -480,14 +481,12 @@ function renderTotalsCharts(filterMemberId) {
   drawPie("pie-category", byCategory, "legend-category");
   if (filterMemberId === "all") drawPie("pie-person", byPerson, "legend-person");
 
-  // Breakdown with expandable items
   const catEntries = Object.entries(byCategory).sort(([,a],[,b]) => b - a);
   if (!catEntries.length) {
     document.getElementById("totals-rows").innerHTML = `<div class="text-sm text-gray-400 text-center py-4">No data.</div>`;
     return;
   }
 
-  // Group expenses per category
   const expByCat = {};
   state.expenses.forEach(exp => {
     const cat   = cleanCat(exp.category);
@@ -502,7 +501,6 @@ function renderTotalsCharts(filterMemberId) {
     const pct   = grandTotal > 0 ? (amt / grandTotal * 100).toFixed(1) : "0.0";
     const color = PIE_COLORS[i % PIE_COLORS.length];
     const items = (expByCat[cat] || []).sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
-
     const itemRows = items.map(exp => {
       const split = (Array.isArray(exp.splitBetween)
         ? exp.splitBetween : String(exp.splitBetween).split(",")).filter(s => s);
@@ -519,7 +517,6 @@ function renderTotalsCharts(filterMemberId) {
           <span style="font-family:var(--mono);font-size:12px;color:#555;white-space:nowrap;margin-left:12px">${share !== null ? formatAmt(share) : "?"} ${ccy}</span>
         </div>`;
     }).join("");
-
     return `
       <div style="border-bottom:1px solid var(--rule)">
         <div style="display:flex;align-items:center;gap:10px;padding:11px 0;cursor:pointer;user-select:none" onclick="toggleCatRow('catrow-${i}','chevron-${i}')">
@@ -538,7 +535,7 @@ function toggleCatRow(rowId, chevId) {
   const el  = document.getElementById(rowId);
   const chv = document.getElementById(chevId);
   const open = el.style.display === "none";
-  el.style.display  = open ? "block" : "none";
+  el.style.display    = open ? "block" : "none";
   chv.style.transform = open ? "rotate(180deg)" : "";
 }
 
