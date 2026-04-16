@@ -440,7 +440,7 @@
 // ────────────────────────────────────────────────────────────
 // CONFIG — paste your Apps Script Web App URL here
 // ────────────────────────────────────────────────────────────
-const API_URL = "https://script.google.com/macros/s/AKfycbz7r7R0tAxzgDT7liIwxew6-3FpHmcsv9CRmBoNtJN6qSs7_0Ae_GwP74O3s08tcOcCEw/exec";
+const API_URL = "https://script.google.com/macros/library/d/1ZjUZxnui5BVybRha6JoVhHKQm83RzJ2xJncPLZQW9pJgtxga8rpTxx0U/2";
 
 // ────────────────────────────────────────────────────────────
 // STATE
@@ -481,11 +481,20 @@ function parseProjectInput(val) {
 // ────────────────────────────────────────────────────────────
 async function api(action, params = {}, body = null) {
   const url = new URL(API_URL);
-  url.searchParams.set("action", action);
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  // Apps Script ignores JSON bodies — send everything as URL params
+  const allParams = { action, ...params, ...(body || {}) };
+  // splitBetween array needs special handling
+  if (allParams.splitBetween && Array.isArray(allParams.splitBetween)) {
+    allParams.splitBetween = allParams.splitBetween.join(",");
+  }
+  for (const [k, v] of Object.entries(allParams)) {
+    if (v !== undefined && v !== null) url.searchParams.set(k, v);
+  }
 
-  const opts = body
-    ? { method: "POST", body: JSON.stringify({ action, ...body }) }
+  // Apps Script requires POST for writes but reads action from URL params either way
+  const isWrite = ["createProject","addMember","addExpense","deleteExpense"].includes(action);
+  const opts = isWrite
+    ? { method: "POST", body: "" }
     : { method: "GET" };
 
   const res  = await fetch(url.toString(), opts);
@@ -506,9 +515,8 @@ async function createProject() {
 
   showLoading("Creating project…");
   try {
-    const res = await api(null, {}, { action: "createProject", name, currency });
-    // Auto-join as first member
-    const mem = await api(null, {}, { action: "addMember", projectId: res.projectId, name: myName });
+    const res = await api("createProject", {}, { name, currency });
+    const mem = await api("addMember", {}, { projectId: res.projectId, name: myName });
     saveLocalMe(res.projectId, mem.memberId, myName);
     await loadProject(res.projectId);
     updateURL(res.projectId);
@@ -524,7 +532,7 @@ async function joinProject() {
 
   showLoading("Joining project…");
   try {
-    const mem = await api(null, {}, { action: "addMember", projectId, name: myName });
+    const mem = await api("addMember", {}, { projectId, name: myName });
     saveLocalMe(projectId, mem.memberId, myName);
     await loadProject(projectId);
     updateURL(projectId);
@@ -726,8 +734,7 @@ async function saveExpense() {
   btn.innerHTML = `<span class="spin"></span> Saving…`;
 
   try {
-    await api(null, {}, {
-      action: "addExpense",
+    await api("addExpense", {}, {
       projectId: state.projectId, itemName, amount, currency,
       payerId, payerName, splitBetween,
     });
@@ -752,7 +759,7 @@ async function deleteExpense(expenseId) {
   if (!confirm("Delete this expense?")) return;
   showLoading("Deleting…");
   try {
-    await api(null, {}, { action: "deleteExpense", expenseId, projectId: state.projectId });
+    await api("deleteExpense", {}, { expenseId, projectId: state.projectId });
     const expRes = await api("getExpenses", { projectId: state.projectId });
     state.expenses = expRes.expenses;
     renderExpenses();
