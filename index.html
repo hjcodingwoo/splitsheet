@@ -3,11 +3,84 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SplitSheet</title>
+<title>SplitChinchin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
-<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.tailwindcss.com">
+// ────────────────────────────────────────────────────────────
+// FX RATES
+// ────────────────────────────────────────────────────────────
+function onExpCurrencyChange(ccy) {
+  const row   = document.getElementById("fx-rate-row");
+  const label = document.getElementById("fx-rate-label");
+  const hint  = document.getElementById("fx-rate-hint");
+  const saved = document.getElementById("fx-rate-saved");
+  const base  = state.currency;
+  if (ccy === base) { row.classList.add("hidden"); return; }
+  row.classList.remove("hidden");
+  label.textContent = `FX Rate (1 ${ccy} = ? ${base})`;
+  hint.textContent  = `→ ${base}`;
+  const existing = state.fxRates[ccy];
+  if (existing) {
+    document.getElementById("exp-fx-rate").value = existing;
+    saved.textContent = "Using saved rate: " + existing;
+  } else {
+    document.getElementById("exp-fx-rate").value = "";
+    saved.textContent = "No rate saved yet — enter one to save for this project";
+  }
+}
+
+function updateFxInputLabel() {
+  const ccy  = document.getElementById("fx-ccy-input").value;
+  const base = state.currency;
+  document.getElementById("fx-input-label").textContent = `Rate (1 ${ccy} = ? ${base})`;
+}
+
+async function saveFxRate() {
+  const ccy  = document.getElementById("fx-ccy-input").value;
+  const rate = parseFloat(document.getElementById("fx-rate-input").value);
+  if (!rate || rate <= 0) return toast("Enter a valid rate");
+  if (ccy === state.currency) return toast("That's already the base currency");
+  showLoading("Saving rate…");
+  try {
+    await api("setFxRate", {}, { projectId: state.projectId, currency: ccy, rate });
+    state.fxRates[ccy] = rate;
+    renderFxTab();
+    toast(`Rate saved: 1 ${ccy} = ${rate} ${state.currency}`);
+  } catch(e) { toast(e.message); }
+  finally { hideLoading(); }
+}
+
+// Called from saveExpense if a non-base currency FX rate was entered
+async function maybeSaveFxFromExpense(ccy, rateStr) {
+  const rate = parseFloat(rateStr);
+  if (!rate || !ccy || ccy === state.currency) return;
+  try {
+    await api("setFxRate", {}, { projectId: state.projectId, currency: ccy, rate });
+    state.fxRates[ccy] = rate;
+  } catch(e) { /* non-fatal */ }
+}
+
+function renderFxTab() {
+  document.getElementById("fx-base-label").textContent = state.currency;
+  document.getElementById("fx-input-label").textContent = `Rate (1 ${document.getElementById("fx-ccy-input").value} = ? ${state.currency})`;
+  const list   = document.getElementById("fx-rates-list");
+  const entries = Object.entries(state.fxRates);
+  if (!entries.length) {
+    list.innerHTML = `<div class="text-sm text-gray-400 text-center py-6">No FX rates set yet.</div>`;
+    return;
+  }
+  list.innerHTML = entries.map(([ccy, rate]) => `
+    <div class="expense-row">
+      <div>
+        <span class="font-medium text-sm">1 ${esc(ccy)}</span>
+        <span class="text-sm text-gray-400"> = ${rate} ${esc(state.currency)}</span>
+      </div>
+      <span class="pill pill-currency">${esc(ccy)}</span>
+    </div>`).join("");
+}
+</script>
 <style>
   :root {
     --ink:       #1a1a18;
@@ -263,7 +336,7 @@
     <div class="w-full max-w-sm">
       <div class="text-center mb-10">
         <div class="mono text-xs tracking-widest text-gray-400 mb-3">LEDGER — v1.0</div>
-        <h1 class="serif text-5xl mb-3" style="color:var(--ink)">Split<span style="color:var(--accent)">Sheet</span></h1>
+        <h1 class="serif text-5xl mb-3" style="color:var(--ink)">Split<span style="color:var(--accent)">Chinchin</span></h1>
         <p class="text-sm text-gray-500">Shared expenses. Zero fuss.<br>No accounts. No drama.</p>
       </div>
 
@@ -336,6 +409,7 @@
         <button class="tab active" data-tab="expenses" onclick="switchTab('expenses', this)">Expenses</button>
         <button class="tab" data-tab="balances" onclick="switchTab('balances', this)">Balances</button>
         <button class="tab" data-tab="settle" onclick="switchTab('settle', this)">Settle Up</button>
+        <button class="tab" data-tab="fx" onclick="switchTab('fx', this)">FX Rates</button>
       </div>
     </div>
 
@@ -369,8 +443,44 @@
         <div class="mono text-xs text-gray-400 mb-1">MINIMUM TRANSACTIONS</div>
         <div class="text-xs text-gray-400">Greedy algorithm — fewest payments to settle all debts</div>
       </div>
+      <div id="settle-missing-fx" class="hidden mb-3 card" style="border-color:var(--accent);background:var(--accent-lt)">
+        <div class="text-xs font-medium" style="color:var(--accent)">⚠️ Missing FX rates — go to FX Rates tab to set them</div>
+        <div id="settle-missing-list" class="mono text-xs mt-1" style="color:var(--accent)"></div>
+      </div>
       <div id="settle-list" class="card">
         <div class="text-sm text-gray-400 text-center py-8">Add expenses to calculate settlement.</div>
+      </div>
+    </div>
+
+    <!-- Tab: FX Rates -->
+    <div id="tab-fx" class="hidden px-4 pb-20" style="max-width:680px; margin:0 auto;">
+      <div class="py-4">
+        <div class="mono text-xs text-gray-400 mb-1">FX RATES</div>
+        <div class="text-xs text-gray-400">Set how much 1 unit of a foreign currency equals in <strong id="fx-base-label"></strong>. Applies to all settlement calculations.</div>
+      </div>
+      <div class="card mb-4">
+        <div class="grid gap-3">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label>Currency</label>
+              <select id="fx-ccy-input">
+                <option>USD</option><option>EUR</option><option>GBP</option>
+                <option>SGD</option><option>HKD</option><option>JPY</option>
+                <option>AUD</option><option>CAD</option><option>CNY</option>
+                <option>THB</option><option>MYR</option><option>IDR</option>
+                <option>INR</option><option>KRW</option><option>PHP</option>
+              </select>
+            </div>
+            <div>
+              <label id="fx-input-label">Rate (1 XXX = ?)</label>
+              <input id="fx-rate-input" type="number" min="0" step="0.0001" placeholder="e.g. 7.80" oninput="updateFxInputLabel()">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="saveFxRate()">Save rate</button>
+        </div>
+      </div>
+      <div id="fx-rates-list" class="card">
+        <div class="text-sm text-gray-400 text-center py-6">No FX rates set yet.</div>
       </div>
     </div>
   </div>
@@ -393,7 +503,7 @@
           </div>
           <div>
             <label>Currency</label>
-            <select id="exp-currency">
+            <select id="exp-currency" onchange="onExpCurrencyChange(this.value)">
               <option>USD</option><option>EUR</option><option>GBP</option>
               <option>SGD</option><option>HKD</option><option>JPY</option>
               <option>AUD</option><option>CAD</option><option>CNY</option>
@@ -401,6 +511,15 @@
               <option>INR</option><option>KRW</option><option>PHP</option>
             </select>
           </div>
+        </div>
+
+        <div id="fx-rate-row" class="hidden">
+          <label id="fx-rate-label">FX Rate (1 XXX = ? YYY)</label>
+          <div class="flex items-center gap-2">
+            <input id="exp-fx-rate" type="number" min="0" step="0.0001" placeholder="e.g. 7.80">
+            <span class="mono text-xs text-gray-400" style="white-space:nowrap" id="fx-rate-hint"></span>
+          </div>
+          <div class="mono text-xs mt-1" style="color:var(--accent)" id="fx-rate-saved"></div>
         </div>
 
         <div>
@@ -441,7 +560,7 @@
 // ────────────────────────────────────────────────────────────
 // CONFIG — paste your Apps Script Web App URL here
 // ────────────────────────────────────────────────────────────
-const API_URL = "https://script.google.com/macros/s/AKfycbz7r7R0tAxzgDT7liIwxew6-3FpHmcsv9CRmBoNtJN6qSs7_0Ae_GwP74O3s08tcOcCEw/exec";
+const API_URL = "YOUR_APPS_SCRIPT_URL_HERE";
 
 // ────────────────────────────────────────────────────────────
 // STATE
@@ -451,7 +570,8 @@ let state = {
   project:   null,
   members:   [],
   expenses:  [],
-  me:        null,   // { memberId, name }
+  fxRates:   {},
+  me:        null,
   currency:  "USD",
 };
 
@@ -559,6 +679,7 @@ async function loadProject(projectId) {
     state.project   = projRes.project;
     state.members   = projRes.members;
     state.expenses  = expRes.expenses;
+    state.fxRates   = projRes.fxRates || {};
     state.currency  = projRes.project.defaultCurrency || "USD";
 
     // Restore local me
@@ -639,13 +760,13 @@ async function renderBalancesAndSettle() {
   showLoading("Calculating…");
   try {
     const res = await api("getSettlement", { projectId });
-    renderBalances(res.balances);
-    renderSettle(res.transactions);
+    renderBalances(res.balances, res.baseCcy);
+    renderSettle(res.transactions, res.baseCcy, res.missingFx);
   } catch (e) { toast(e.message); }
   finally { hideLoading(); }
 }
 
-function renderBalances(balances) {
+function renderBalances(balances, baseCcy) {
   const list = document.getElementById("balance-list");
   if (!balances || !balances.length) {
     list.innerHTML = `<div class="text-sm text-gray-400 text-center py-8">No data yet.</div>`;
@@ -658,12 +779,21 @@ function renderBalances(balances) {
     return `
       <div class="expense-row">
         <div class="font-medium text-sm">${esc(b.name)}</div>
-        <span class="pill ${cls} text-sm">${sign}${formatAmt(b.net)} ${state.currency}</span>
+        <span class="pill ${cls} text-sm">${sign}${formatAmt(b.net)} ${baseCcy || state.currency}</span>
       </div>`;
   }).join("");
 }
 
-function renderSettle(transactions) {
+function renderSettle(transactions, baseCcy, missingFx) {
+  const warn = document.getElementById("settle-missing-fx");
+  const wlist = document.getElementById("settle-missing-list");
+  if (missingFx && missingFx.length) {
+    warn.classList.remove("hidden");
+    wlist.textContent = "No rate set for: " + missingFx.join(", ") + " — amounts used as-is";
+  } else {
+    warn.classList.add("hidden");
+  }
+  const ccy  = baseCcy || state.currency;
   const list = document.getElementById("settle-list");
   if (!transactions || !transactions.length) {
     list.innerHTML = `<div class="text-center py-8">
@@ -677,7 +807,7 @@ function renderSettle(transactions) {
       <div class="font-medium text-sm flex-1">${esc(t.from)}</div>
       <div class="settle-arrow">→</div>
       <div class="font-medium text-sm flex-1">${esc(t.to)}</div>
-      <div class="mono text-sm font-medium" style="color:var(--accent)">${formatAmt(t.amount)} ${state.currency}</div>
+      <div class="mono text-sm font-medium" style="color:var(--accent)">${formatAmt(t.amount)} ${ccy}</div>
     </div>`).join("");
 }
 
@@ -737,6 +867,12 @@ async function saveExpense() {
   btn.disabled = true;
   btn.innerHTML = `<span class="spin"></span> Saving…`;
 
+  // Save FX rate if user entered one for a foreign currency
+  const fxRateVal = document.getElementById("exp-fx-rate").value;
+  if (currency !== state.currency && fxRateVal) {
+    await maybeSaveFxFromExpense(currency, fxRateVal);
+  }
+
   try {
     await api("addExpense", {}, {
       projectId: state.projectId, itemName, amount, currency,
@@ -792,14 +928,14 @@ function clearSplit() {
 // TABS
 // ────────────────────────────────────────────────────────────
 function switchTab(name, btn) {
-  ["expenses","balances","settle"].forEach(t => {
+  ["expenses","balances","settle","fx"].forEach(t => {
     document.getElementById("tab-"+t).classList.add("hidden");
     document.querySelector(`[data-tab="${t}"]`).classList.remove("active");
   });
   document.getElementById("tab-"+name).classList.remove("hidden");
   btn.classList.add("active");
-
   if (name === "balances" || name === "settle") renderBalancesAndSettle();
+  if (name === "fx") renderFxTab();
 }
 
 // ────────────────────────────────────────────────────────────
@@ -860,7 +996,7 @@ function goHome() {
   hide("view-project");
   show("view-landing");
   history.replaceState({}, "", location.pathname);
-  state = { projectId:null, project:null, members:[], expenses:[], me:null, currency:"USD" };
+  state = { projectId:null, project:null, members:[], expenses:[], fxRates:{}, me:null, currency:"USD" };
 }
 
 // Local storage helpers to remember who you are
