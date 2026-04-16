@@ -1021,12 +1021,19 @@ async function showDirectory() {
       return;
     }
     list.innerHTML = res.projects.map(p => `
-      <div class="expense-row">
-        <div>
-          <div class="font-medium text-sm">${esc(p.name)}</div>
-          <div class="mono text-xs text-gray-400 mt-0.5">${esc(p.projectId)} · ${p.memberCount} member${p.memberCount !== 1 ? "s" : ""} · ${esc(p.defaultCurrency)}</div>
+      <div class="expense-row" style="display:block;padding:14px 0;">
+        <div class="flex items-center justify-between mb-2">
+          <div>
+            <div class="font-medium text-sm">${esc(p.name)}</div>
+            <div class="mono text-xs text-gray-400">${esc(p.defaultCurrency)} · ${p.members.length} member${p.members.length !== 1 ? "s" : ""}</div>
+          </div>
         </div>
-        <button class="btn btn-secondary text-xs py-1.5 px-3" onclick="quickJoin('${esc(p.projectId)}', '${esc(p.name)}')">Join →</button>
+        ${p.members.length ? `<div class="check-grid mb-2">${p.members.map(m => `
+          <label class="check-item" data-project="${esc(p.projectId)}" data-member="${esc(m.memberId)}" data-name="${esc(m.name)}" onclick="selectDirectoryMember(this)">
+            ${esc(m.name)}
+          </label>`).join("")}
+          <label class="check-item" style="font-style:italic;color:#aaa" onclick="newMemberJoin('${esc(p.projectId)}','${esc(p.name)}')">+ New</label>
+        </div>` : `<button class="btn btn-secondary text-xs" onclick="newMemberJoin('${esc(p.projectId)}','${esc(p.name)}')">Join →</button>`}
       </div>`).join("");
   } catch(e) { toast(e.message); }
   finally { hideLoading(); }
@@ -1037,9 +1044,24 @@ function hideDirectory() {
   show("view-landing");
 }
 
-function quickJoin(projectId, projectName) {
+async function selectDirectoryMember(el) {
+  const projectId = el.dataset.project;
+  const name      = el.dataset.name;
+  const memberId  = el.dataset.member;
+  hideDirectory();
+  showLoading("Loading project…");
+  try {
+    saveLocalMe(projectId, memberId, name);
+    await loadProject(projectId);
+    updateURL(projectId);
+  } catch(e) { toast(e.message); }
+  finally { hideLoading(); }
+}
+
+function newMemberJoin(projectId, projectName) {
   hideDirectory();
   document.getElementById("join-id").value = projectId;
+  document.getElementById("join-name").value = "";
   document.getElementById("join-name").focus();
   toast("Enter your name to join " + projectName);
 }
