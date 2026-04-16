@@ -434,13 +434,14 @@
   </div>
 </div>
 
+<div id="jsonp-container" style="display:none"></div>
 <div id="toast"></div>
 
 <script>
 // ────────────────────────────────────────────────────────────
 // CONFIG — paste your Apps Script Web App URL here
 // ────────────────────────────────────────────────────────────
-const API_URL = "https://script.google.com/macros/library/d/1ZjUZxnui5BVybRha6JoVhHKQm83RzJ2xJncPLZQW9pJgtxga8rpTxx0U/2";
+const API_URL = "https://script.google.com/macros/library/d/1ZjUZxnui5BVybRha6JoVhHKQm83RzJ2xJncPLZQW9pJgtxga8rpTxx0U/3";
 
 // ────────────────────────────────────────────────────────────
 // STATE
@@ -479,28 +480,31 @@ function parseProjectInput(val) {
 // ────────────────────────────────────────────────────────────
 // API HELPER
 // ────────────────────────────────────────────────────────────
-async function api(action, params = {}, body = null) {
-  const url = new URL(API_URL);
-  // Apps Script ignores JSON bodies — send everything as URL params
-  const allParams = { action, ...params, ...(body || {}) };
-  // splitBetween array needs special handling
-  if (allParams.splitBetween && Array.isArray(allParams.splitBetween)) {
-    allParams.splitBetween = allParams.splitBetween.join(",");
-  }
-  for (const [k, v] of Object.entries(allParams)) {
-    if (v !== undefined && v !== null) url.searchParams.set(k, v);
-  }
+function api(action, params = {}, body = null) {
+  return new Promise((resolve, reject) => {
+    const allParams = { action, ...params, ...(body || {}) };
+    if (Array.isArray(allParams.splitBetween))
+      allParams.splitBetween = allParams.splitBetween.join(",");
 
-  // Apps Script requires POST for writes but reads action from URL params either way
-  const isWrite = ["createProject","addMember","addExpense","deleteExpense"].includes(action);
-  const opts = isWrite
-    ? { method: "POST", body: "" }
-    : { method: "GET" };
+    const cbName = "_cb_" + Date.now();
+    allParams.callback = cbName;
 
-  const res  = await fetch(url.toString(), opts);
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return data;
+    const url = new URL(API_URL);
+    for (const [k, v] of Object.entries(allParams))
+      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
+
+    window[cbName] = (data) => {
+      delete window[cbName];
+      document.getElementById("jsonp-container").innerHTML = "";
+      if (data.error) reject(new Error(data.error));
+      else resolve(data);
+    };
+
+    const s = document.createElement("script");
+    s.src = url.toString();
+    s.onerror = () => { delete window[cbName]; reject(new Error("Failed to reach server. Check your API_URL.")); };
+    document.getElementById("jsonp-container").appendChild(s);
+  });
 }
 
 // ────────────────────────────────────────────────────────────
