@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SplitSheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --ink:       #1a1a18;
+    --paper:     #f5f0e8;
+    --cream:     #ede8dc;
+    --rule:      #d4cfc3;
+    --accent:    #c1440e;
+    --accent-lt: #f4e0d8;
+    --green:     #2d6a4f;
+    --green-lt:  #d8eee5;
+    --mono:      'DM Mono', monospace;
+    --serif:     'DM Serif Display', serif;
+    --sans:      'DM Sans', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  /* Ledger line texture */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: repeating-linear-gradient(
+      transparent 0px, transparent 31px,
+      var(--rule) 31px, var(--rule) 32px
+    );
+    opacity: 0.35;
+    pointer-events: none;
+    z-index: 0;
+  }
+  #app { position: relative; z-index: 1; }
+
+  /* Typography */
+  .serif { font-family: var(--serif); }
+  .mono  { font-family: var(--mono);  }
+
+  /* Inputs */
+  input, select, textarea {
+    font-family: var(--sans);
+    font-size: 14px;
+    background: #fff;
+    border: 1.5px solid var(--rule);
+    border-radius: 4px;
+    padding: 8px 12px;
+    width: 100%;
+    color: var(--ink);
+    transition: border-color .15s;
+    outline: none;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-lt);
+  }
+  label {
+    display: block;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #888;
+    margin-bottom: 5px;
+  }
+
+  /* Buttons */
+  .btn {
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: .04em;
+    padding: 9px 20px;
+    border-radius: 4px;
+    border: 1.5px solid transparent;
+    cursor: pointer;
+    transition: all .15s;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .btn-primary:hover { background: #a33a0c; }
+  .btn-secondary {
+    background: transparent;
+    color: var(--ink);
+    border-color: var(--rule);
+  }
+  .btn-secondary:hover { background: var(--cream); }
+  .btn-ghost {
+    background: transparent;
+    color: #888;
+    border: none;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  .btn-ghost:hover { color: var(--accent); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  /* Cards */
+  .card {
+    background: rgba(255,255,255,.75);
+    backdrop-filter: blur(4px);
+    border: 1.5px solid var(--rule);
+    border-radius: 8px;
+    padding: 24px;
+  }
+
+  /* Pill tags */
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+    font-family: var(--mono);
+  }
+  .pill-currency { background: var(--cream); color: #666; }
+  .pill-positive { background: var(--green-lt); color: var(--green); }
+  .pill-negative { background: var(--accent-lt); color: var(--accent); }
+
+  /* Tab bar */
+  .tabs { display: flex; border-bottom: 1.5px solid var(--rule); gap: 0; }
+  .tab {
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #888;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1.5px;
+    cursor: pointer;
+    transition: all .15s;
+    background: none; border-top: none; border-left: none; border-right: none;
+    font-family: var(--sans);
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab:hover:not(.active) { color: var(--ink); }
+
+  /* Expense row */
+  .expense-row {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--rule);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: start;
+    animation: fadeSlide .25s ease;
+  }
+  .expense-row:last-child { border-bottom: none; }
+
+  /* Settlement row */
+  .settle-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px dashed var(--rule);
+    animation: fadeSlide .25s ease;
+  }
+  .settle-row:last-child { border-bottom: none; }
+  .settle-arrow { color: var(--accent); font-size: 18px; flex-shrink: 0; }
+
+  /* Toast */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: #fff;
+    padding: 10px 20px; border-radius: 6px;
+    font-size: 13px; font-family: var(--mono);
+    opacity: 0; transition: opacity .2s;
+    pointer-events: none; z-index: 9999;
+    white-space: nowrap;
+  }
+  #toast.show { opacity: 1; }
+
+  /* Modal */
+  .modal-bg {
+    position: fixed; inset: 0;
+    background: rgba(26,26,24,.5);
+    backdrop-filter: blur(3px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100; padding: 16px;
+    animation: fadeIn .15s ease;
+  }
+  .modal {
+    background: var(--paper);
+    border: 1.5px solid var(--rule);
+    border-radius: 10px;
+    padding: 28px;
+    width: 100%; max-width: 480px;
+    max-height: 90vh; overflow-y: auto;
+    animation: slideUp .2s ease;
+  }
+
+  /* Multi-select checkboxes */
+  .check-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .check-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 12px;
+    border: 1.5px solid var(--rule);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all .12s;
+    user-select: none;
+  }
+  .check-item.checked {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .check-item input { display: none; }
+
+  /* Spinner */
+  .spin {
+    width: 16px; height: 16px;
+    border: 2px solid #ffffff44;
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+    display: inline-block;
+  }
+
+  @keyframes fadeSlide {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; } to { opacity: 1; }
+  }
+  @keyframes slideUp {
+    from { transform: translateY(12px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .modal { padding: 20px; }
+    .card  { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── LANDING ─────────────────────────────────────── -->
+  <div id="view-landing" class="min-h-screen flex flex-col items-center justify-center px-4 py-12">
+    <div class="w-full max-w-sm">
+      <div class="text-center mb-10">
+        <div class="mono text-xs tracking-widest text-gray-400 mb-3">LEDGER — v1.0</div>
+        <h1 class="serif text-5xl mb-3" style="color:var(--ink)">Split<span style="color:var(--accent)">Sheet</span></h1>
+        <p class="text-sm text-gray-500">Shared expenses. Zero fuss.<br>No accounts. No drama.</p>
+      </div>
+
+      <!-- Join existing project -->
+      <div class="card mb-4">
+        <h2 class="serif text-xl mb-4">Join a project</h2>
+        <div class="mb-3">
+          <label>Project ID</label>
+          <input id="join-id" type="text" placeholder="Paste project ID or link" oninput="parseProjectInput(this.value)">
+        </div>
+        <div class="mb-4">
+          <label>Your name</label>
+          <input id="join-name" type="text" placeholder="How should we call you?">
+        </div>
+        <button class="btn btn-primary w-full" onclick="joinProject()">
+          Enter project →
+        </button>
+      </div>
+
+      <!-- Create new project -->
+      <div class="card">
+        <h2 class="serif text-xl mb-4">Start a new project</h2>
+        <div class="mb-3">
+          <label>Project name</label>
+          <input id="new-name" type="text" placeholder="e.g. Bali Trip 2025">
+        </div>
+        <div class="mb-4">
+          <label>Default currency</label>
+          <select id="new-currency">
+            <option>USD</option><option>EUR</option><option>GBP</option>
+            <option>SGD</option><option>HKD</option><option>JPY</option>
+            <option>AUD</option><option>CAD</option><option>CNY</option>
+            <option>THB</option><option>MYR</option><option>IDR</option>
+            <option>INR</option><option>KRW</option><option>PHP</option>
+          </select>
+        </div>
+        <div class="mb-4">
+          <label>Your name</label>
+          <input id="creator-name" type="text" placeholder="You'll be the first member">
+        </div>
+        <button class="btn btn-primary w-full" onclick="createProject()">
+          Create project →
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PROJECT VIEW ─────────────────────────────────── -->
+  <div id="view-project" class="hidden min-h-screen">
+
+    <!-- Header -->
+    <header style="background:rgba(245,240,232,.9); backdrop-filter:blur(8px); border-bottom:1.5px solid var(--rule);"
+            class="sticky top-0 z-10 px-4 py-3 flex items-center justify-between">
+      <div>
+        <div id="hdr-name" class="serif text-xl" style="line-height:1.2"></div>
+        <div id="hdr-meta" class="mono text-xs text-gray-400 mt-0.5"></div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="btn btn-secondary text-xs py-1.5 px-3" onclick="copyShareLink()" title="Copy share link">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          Share
+        </button>
+        <button class="btn btn-ghost text-xs" onclick="goHome()">← Home</button>
+      </div>
+    </header>
+
+    <!-- Tabs -->
+    <div class="px-4 pt-2" style="max-width:680px; margin:0 auto;">
+      <div class="tabs">
+        <button class="tab active" data-tab="expenses" onclick="switchTab('expenses', this)">Expenses</button>
+        <button class="tab" data-tab="balances" onclick="switchTab('balances', this)">Balances</button>
+        <button class="tab" data-tab="settle" onclick="switchTab('settle', this)">Settle Up</button>
+      </div>
+    </div>
+
+    <!-- Tab: Expenses -->
+    <div id="tab-expenses" class="px-4 pb-20" style="max-width:680px; margin:0 auto;">
+      <div class="flex items-center justify-between py-4">
+        <div class="mono text-xs text-gray-400" id="exp-count"></div>
+        <button class="btn btn-primary" onclick="openAddExpense()">
+          <span style="font-size:16px;line-height:1">+</span> Add expense
+        </button>
+      </div>
+      <div id="expense-list" class="card">
+        <div class="text-sm text-gray-400 text-center py-8">No expenses yet.</div>
+      </div>
+    </div>
+
+    <!-- Tab: Balances -->
+    <div id="tab-balances" class="hidden px-4 pb-20" style="max-width:680px; margin:0 auto;">
+      <div class="py-4">
+        <div class="mono text-xs text-gray-400 mb-1">NET BALANCES</div>
+        <div class="text-xs text-gray-400">Positive = owed money · Negative = owes money</div>
+      </div>
+      <div id="balance-list" class="card">
+        <div class="text-sm text-gray-400 text-center py-8">Add expenses to see balances.</div>
+      </div>
+    </div>
+
+    <!-- Tab: Settle Up -->
+    <div id="tab-settle" class="hidden px-4 pb-20" style="max-width:680px; margin:0 auto;">
+      <div class="py-4">
+        <div class="mono text-xs text-gray-400 mb-1">MINIMUM TRANSACTIONS</div>
+        <div class="text-xs text-gray-400">Greedy algorithm — fewest payments to settle all debts</div>
+      </div>
+      <div id="settle-list" class="card">
+        <div class="text-sm text-gray-400 text-center py-8">Add expenses to calculate settlement.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ADD EXPENSE MODAL ──────────────────────────── -->
+  <div id="modal-expense" class="modal-bg hidden" onclick="closeIfBg(event, 'modal-expense')">
+    <div class="modal">
+      <h2 class="serif text-2xl mb-5">New expense</h2>
+
+      <div class="grid gap-4">
+        <div>
+          <label>Item name</label>
+          <input id="exp-name" type="text" placeholder="Dinner, taxi, hotel…">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label>Amount</label>
+            <input id="exp-amount" type="number" min="0" step="0.01" placeholder="0.00">
+          </div>
+          <div>
+            <label>Currency</label>
+            <select id="exp-currency">
+              <option>USD</option><option>EUR</option><option>GBP</option>
+              <option>SGD</option><option>HKD</option><option>JPY</option>
+              <option>AUD</option><option>CAD</option><option>CNY</option>
+              <option>THB</option><option>MYR</option><option>IDR</option>
+              <option>INR</option><option>KRW</option><option>PHP</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label>Paid by</label>
+          <select id="exp-payer"></select>
+        </div>
+
+        <div>
+          <label>Split between</label>
+          <div id="exp-split" class="check-grid mt-1"></div>
+          <div class="flex gap-2 mt-2">
+            <button class="btn btn-ghost text-xs" onclick="selectAllSplit()">All</button>
+            <button class="btn btn-ghost text-xs" onclick="clearSplit()">None</button>
+          </div>
+        </div>
+
+        <div class="flex gap-3 pt-2">
+          <button class="btn btn-secondary flex-1" onclick="closeModal('modal-expense')">Cancel</button>
+          <button id="save-exp-btn" class="btn btn-primary flex-1" onclick="saveExpense()">Save expense</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── LOADING OVERLAY ──────────────────────────────── -->
+  <div id="loading" class="hidden" style="position:fixed;inset:0;background:rgba(245,240,232,.75);z-index:200;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
+      <div style="width:32px;height:32px;border:3px solid var(--rule);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;"></div>
+      <div class="mono text-xs text-gray-400" id="loading-msg">Loading…</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ────────────────────────────────────────────────────────────
+// CONFIG — paste your Apps Script Web App URL here
+// ────────────────────────────────────────────────────────────
+const API_URL = "https://script.google.com/macros/s/AKfycbz7r7R0tAxzgDT7liIwxew6-3FpHmcsv9CRmBoNtJN6qSs7_0Ae_GwP74O3s08tcOcCEw/exec";
+
+// ────────────────────────────────────────────────────────────
+// STATE
+// ────────────────────────────────────────────────────────────
+let state = {
+  projectId: null,
+  project:   null,
+  members:   [],
+  expenses:  [],
+  me:        null,   // { memberId, name }
+  currency:  "USD",
+};
+
+// ────────────────────────────────────────────────────────────
+// INIT
+// ────────────────────────────────────────────────────────────
+window.addEventListener("DOMContentLoaded", () => {
+  // Check if URL contains a project ID
+  const params = new URLSearchParams(location.search);
+  const pid    = params.get("p");
+  if (pid) {
+    document.getElementById("join-id").value = pid;
+    document.getElementById("join-name").focus();
+  }
+});
+
+function parseProjectInput(val) {
+  // Accept full URL or bare ID
+  try {
+    const url = new URL(val);
+    const p   = url.searchParams.get("p");
+    if (p) document.getElementById("join-id").value = p;
+  } catch {}
+}
+
+// ────────────────────────────────────────────────────────────
+// API HELPER
+// ────────────────────────────────────────────────────────────
+async function api(action, params = {}, body = null) {
+  const url = new URL(API_URL);
+  url.searchParams.set("action", action);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+
+  const opts = body
+    ? { method: "POST", body: JSON.stringify({ action, ...body }) }
+    : { method: "GET" };
+
+  const res  = await fetch(url.toString(), opts);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+// ────────────────────────────────────────────────────────────
+// PROJECT CREATION / JOINING
+// ────────────────────────────────────────────────────────────
+async function createProject() {
+  const name     = v("new-name").trim();
+  const currency = v("new-currency");
+  const myName   = v("creator-name").trim();
+  if (!name)   return toast("Enter a project name");
+  if (!myName) return toast("Enter your name");
+
+  showLoading("Creating project…");
+  try {
+    const res = await api(null, {}, { action: "createProject", name, currency });
+    // Auto-join as first member
+    const mem = await api(null, {}, { action: "addMember", projectId: res.projectId, name: myName });
+    saveLocalMe(res.projectId, mem.memberId, myName);
+    await loadProject(res.projectId);
+    updateURL(res.projectId);
+  } catch (e) { toast(e.message); }
+  finally { hideLoading(); }
+}
+
+async function joinProject() {
+  const projectId = v("join-id").trim();
+  const myName    = v("join-name").trim();
+  if (!projectId) return toast("Enter a project ID");
+  if (!myName)    return toast("Enter your name");
+
+  showLoading("Joining project…");
+  try {
+    const mem = await api(null, {}, { action: "addMember", projectId, name: myName });
+    saveLocalMe(projectId, mem.memberId, myName);
+    await loadProject(projectId);
+    updateURL(projectId);
+  } catch (e) { toast(e.message); }
+  finally { hideLoading(); }
+}
+
+// ────────────────────────────────────────────────────────────
+// LOAD PROJECT
+// ────────────────────────────────────────────────────────────
+async function loadProject(projectId) {
+  showLoading("Loading project…");
+  try {
+    const [projRes, expRes] = await Promise.all([
+      api("getProject", { projectId }),
+      api("getExpenses", { projectId }),
+    ]);
+
+    state.projectId = projectId;
+    state.project   = projRes.project;
+    state.members   = projRes.members;
+    state.expenses  = expRes.expenses;
+    state.currency  = projRes.project.defaultCurrency || "USD";
+
+    // Restore local me
+    const saved = loadLocalMe(projectId);
+    state.me    = saved || null;
+
+    renderProject();
+    show("view-project");
+    hide("view-landing");
+  } catch (e) { toast("Error: " + e.message); }
+  finally { hideLoading(); }
+}
+
+// ────────────────────────────────────────────────────────────
+// RENDER
+// ────────────────────────────────────────────────────────────
+function renderProject() {
+  const { project, members, expenses } = state;
+
+  // Header
+  document.getElementById("hdr-name").textContent = project.name;
+  document.getElementById("hdr-meta").textContent =
+    `${project.projectId} · ${members.length} member${members.length !== 1 ? "s" : ""}`;
+
+  renderExpenses();
+}
+
+function renderExpenses() {
+  const { expenses, members, currency } = state;
+  const list = document.getElementById("expense-list");
+  const cnt  = document.getElementById("exp-count");
+
+  cnt.textContent = `${expenses.length} expense${expenses.length !== 1 ? "s" : ""}`;
+
+  if (!expenses.length) {
+    list.innerHTML = `<div class="text-sm text-gray-400 text-center py-8">No expenses yet. Add the first one!</div>`;
+    return;
+  }
+
+  const memberMap = {};
+  members.forEach(m => memberMap[m.memberId] = m.name);
+
+  // Sort newest first
+  const sorted = [...expenses].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  list.innerHTML = sorted.map(exp => {
+    const splitNames = exp.splitBetween
+      .map(id => memberMap[id] || id)
+      .join(", ");
+    const date = new Date(exp.createdAt).toLocaleDateString("en-GB", { day:"numeric", month:"short" });
+    const isMine = state.me && exp.payerId === state.me.memberId;
+
+    return `
+      <div class="expense-row">
+        <div>
+          <div class="font-medium text-sm">${esc(exp.itemName)}</div>
+          <div class="text-xs text-gray-400 mt-0.5">
+            Paid by <strong>${esc(exp.payerName)}</strong>${isMine ? ' <span style="color:var(--accent)">· you</span>' : ''}
+            · Split: ${esc(splitNames)}
+          </div>
+          <div class="mono text-xs text-gray-300 mt-0.5">${date}</div>
+        </div>
+        <div class="flex items-start gap-2">
+          <div class="text-right">
+            <div class="font-medium">${formatAmt(exp.amount)}</div>
+            <span class="pill pill-currency">${exp.currency}</span>
+          </div>
+          ${state.me ? `<button class="btn btn-ghost" style="padding:2px 6px;margin-top:2px;" onclick="deleteExpense('${exp.expenseId}')" title="Delete">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          </button>` : ''}
+        </div>
+      </div>`;
+  }).join("");
+}
+
+async function renderBalancesAndSettle() {
+  const { projectId } = state;
+  showLoading("Calculating…");
+  try {
+    const res = await api("getSettlement", { projectId });
+    renderBalances(res.balances);
+    renderSettle(res.transactions);
+  } catch (e) { toast(e.message); }
+  finally { hideLoading(); }
+}
+
+function renderBalances(balances) {
+  const list = document.getElementById("balance-list");
+  if (!balances || !balances.length) {
+    list.innerHTML = `<div class="text-sm text-gray-400 text-center py-8">No data yet.</div>`;
+    return;
+  }
+  const sorted = [...balances].sort((a,b) => b.net - a.net);
+  list.innerHTML = sorted.map(b => {
+    const cls  = b.net > 0 ? "pill-positive" : b.net < 0 ? "pill-negative" : "pill-currency";
+    const sign = b.net > 0 ? "+" : "";
+    return `
+      <div class="expense-row">
+        <div class="font-medium text-sm">${esc(b.name)}</div>
+        <span class="pill ${cls} text-sm">${sign}${formatAmt(b.net)} ${state.currency}</span>
+      </div>`;
+  }).join("");
+}
+
+function renderSettle(transactions) {
+  const list = document.getElementById("settle-list");
+  if (!transactions || !transactions.length) {
+    list.innerHTML = `<div class="text-center py-8">
+      <div style="font-size:2rem;margin-bottom:8px">🎉</div>
+      <div class="text-sm text-gray-400">Everyone's even! Nothing to settle.</div>
+    </div>`;
+    return;
+  }
+  list.innerHTML = transactions.map(t => `
+    <div class="settle-row">
+      <div class="font-medium text-sm flex-1">${esc(t.from)}</div>
+      <div class="settle-arrow">→</div>
+      <div class="font-medium text-sm flex-1">${esc(t.to)}</div>
+      <div class="mono text-sm font-medium" style="color:var(--accent)">${formatAmt(t.amount)} ${state.currency}</div>
+    </div>`).join("");
+}
+
+// ────────────────────────────────────────────────────────────
+// EXPENSE MODAL
+// ────────────────────────────────────────────────────────────
+function openAddExpense() {
+  if (!state.members.length) return toast("No members in project yet");
+
+  // Populate payer dropdown
+  const payerSel = document.getElementById("exp-payer");
+  payerSel.innerHTML = state.members.map(m =>
+    `<option value="${m.memberId}">${esc(m.name)}</option>`
+  ).join("");
+
+  // Pre-select current user
+  if (state.me) payerSel.value = state.me.memberId;
+
+  // Set default currency
+  const curr = document.getElementById("exp-currency");
+  curr.value = state.currency;
+
+  // Populate split checkboxes — default all checked
+  const splitDiv = document.getElementById("exp-split");
+  splitDiv.innerHTML = state.members.map(m => `
+    <label class="check-item checked" data-id="${m.memberId}">
+      <input type="checkbox" checked value="${m.memberId}">
+      ${esc(m.name)}
+    </label>`).join("");
+
+  splitDiv.querySelectorAll(".check-item").forEach(el => {
+    el.addEventListener("click", () => {
+      el.classList.toggle("checked");
+      el.querySelector("input").checked = el.classList.contains("checked");
+    });
+  });
+
+  showModal("modal-expense");
+  document.getElementById("exp-name").focus();
+}
+
+async function saveExpense() {
+  const itemName     = v("exp-name").trim();
+  const amount       = parseFloat(v("exp-amount"));
+  const currency     = v("exp-currency");
+  const payerSel     = document.getElementById("exp-payer");
+  const payerId      = payerSel.value;
+  const payerName    = payerSel.options[payerSel.selectedIndex].text;
+  const splitBetween = [...document.querySelectorAll("#exp-split .check-item.checked")]
+    .map(el => el.dataset.id);
+
+  if (!itemName)          return toast("Enter an item name");
+  if (!amount || amount <= 0) return toast("Enter a valid amount");
+  if (!splitBetween.length)   return toast("Select at least one person to split with");
+
+  const btn = document.getElementById("save-exp-btn");
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spin"></span> Saving…`;
+
+  try {
+    await api(null, {}, {
+      action: "addExpense",
+      projectId: state.projectId, itemName, amount, currency,
+      payerId, payerName, splitBetween,
+    });
+
+    // Refresh expense list
+    const expRes = await api("getExpenses", { projectId: state.projectId });
+    state.expenses = expRes.expenses;
+    renderExpenses();
+    closeModal("modal-expense");
+    toast("Expense added ✓");
+    // Clear form
+    document.getElementById("exp-name").value   = "";
+    document.getElementById("exp-amount").value = "";
+  } catch (e) { toast(e.message); }
+  finally {
+    btn.disabled = false;
+    btn.textContent = "Save expense";
+  }
+}
+
+async function deleteExpense(expenseId) {
+  if (!confirm("Delete this expense?")) return;
+  showLoading("Deleting…");
+  try {
+    await api(null, {}, { action: "deleteExpense", expenseId, projectId: state.projectId });
+    const expRes = await api("getExpenses", { projectId: state.projectId });
+    state.expenses = expRes.expenses;
+    renderExpenses();
+    toast("Deleted");
+  } catch (e) { toast(e.message); }
+  finally { hideLoading(); }
+}
+
+// ────────────────────────────────────────────────────────────
+// SPLIT HELPERS
+// ────────────────────────────────────────────────────────────
+function selectAllSplit() {
+  document.querySelectorAll("#exp-split .check-item").forEach(el => {
+    el.classList.add("checked");
+    el.querySelector("input").checked = true;
+  });
+}
+function clearSplit() {
+  document.querySelectorAll("#exp-split .check-item").forEach(el => {
+    el.classList.remove("checked");
+    el.querySelector("input").checked = false;
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// TABS
+// ────────────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  ["expenses","balances","settle"].forEach(t => {
+    document.getElementById("tab-"+t).classList.add("hidden");
+    document.querySelector(`[data-tab="${t}"]`).classList.remove("active");
+  });
+  document.getElementById("tab-"+name).classList.remove("hidden");
+  btn.classList.add("active");
+
+  if (name === "balances" || name === "settle") renderBalancesAndSettle();
+}
+
+// ────────────────────────────────────────────────────────────
+// UTILS
+// ────────────────────────────────────────────────────────────
+function v(id)    { return document.getElementById(id).value; }
+function show(id) { document.getElementById(id).classList.remove("hidden"); }
+function hide(id) { document.getElementById(id).classList.add("hidden"); }
+
+function showModal(id) { document.getElementById(id).classList.remove("hidden"); }
+function closeModal(id){ document.getElementById(id).classList.add("hidden"); }
+function closeIfBg(e, id) { if (e.target.id === id) closeModal(id); }
+
+function showLoading(msg) {
+  document.getElementById("loading-msg").textContent = msg || "Loading…";
+  const el = document.getElementById("loading");
+  el.style.display = "flex";
+}
+function hideLoading() {
+  document.getElementById("loading").style.display = "none";
+}
+
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2800);
+}
+
+function formatAmt(n) {
+  const num = parseFloat(n) || 0;
+  return num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function esc(s) {
+  return String(s || "")
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function updateURL(projectId) {
+  const url = new URL(location.href);
+  url.searchParams.set("p", projectId);
+  history.replaceState({}, "", url.toString());
+}
+
+function copyShareLink() {
+  const url = new URL(location.href);
+  url.searchParams.set("p", state.projectId);
+  navigator.clipboard.writeText(url.toString())
+    .then(() => toast("Share link copied!"))
+    .catch(() => toast("Copy failed — copy the URL manually"));
+}
+
+function goHome() {
+  hide("view-project");
+  show("view-landing");
+  history.replaceState({}, "", location.pathname);
+  state = { projectId:null, project:null, members:[], expenses:[], me:null, currency:"USD" };
+}
+
+// Local storage helpers to remember who you are
+function saveLocalMe(projectId, memberId, name) {
+  try { localStorage.setItem("ss_me_"+projectId, JSON.stringify({ memberId, name })); } catch {}
+  state.me = { memberId, name };
+}
+function loadLocalMe(projectId) {
+  try { return JSON.parse(localStorage.getItem("ss_me_"+projectId)); } catch { return null; }
+}
+</script>
+</body>
+</html>
