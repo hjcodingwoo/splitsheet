@@ -8,80 +8,6 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
-<script>
-// ────────────────────────────────────────────────────────────
-// FX RATES
-// ────────────────────────────────────────────────────────────
-function onExpCurrencyChange(ccy) {
-  const row   = document.getElementById("fx-rate-row");
-  const label = document.getElementById("fx-rate-label");
-  const hint  = document.getElementById("fx-rate-hint");
-  const saved = document.getElementById("fx-rate-saved");
-  const base  = state.currency;
-  if (ccy === base) { row.classList.add("hidden"); return; }
-  row.classList.remove("hidden");
-  label.textContent = `FX Rate (1 ${ccy} = ? ${base})`;
-  hint.textContent  = `→ ${base}`;
-  const existing = state.fxRates[ccy];
-  if (existing) {
-    document.getElementById("exp-fx-rate").value = existing;
-    saved.textContent = "Using saved rate: " + existing;
-  } else {
-    document.getElementById("exp-fx-rate").value = "";
-    saved.textContent = "No rate saved yet — enter one to save for this project";
-  }
-}
-
-function updateFxInputLabel() {
-  const ccy  = document.getElementById("fx-ccy-input").value;
-  const base = state.currency;
-  document.getElementById("fx-input-label").textContent = `Rate (1 ${ccy} = ? ${base})`;
-}
-
-async function saveFxRate() {
-  const ccy  = document.getElementById("fx-ccy-input").value;
-  const rate = parseFloat(document.getElementById("fx-rate-input").value);
-  if (!rate || rate <= 0) return toast("Enter a valid rate");
-  if (ccy === state.currency) return toast("That's already the base currency");
-  showLoading("Saving rate…");
-  try {
-    await api("setFxRate", { projectId: state.projectId, currency: ccy, rate });
-    state.fxRates[ccy] = rate;
-    renderFxTab();
-    toast(`Rate saved: 1 ${ccy} = ${rate} ${state.currency}`);
-  } catch(e) { toast(e.message); }
-  finally { hideLoading(); }
-}
-
-// Called from saveExpense if a non-base currency FX rate was entered
-async function maybeSaveFxFromExpense(ccy, rateStr) {
-  const rate = parseFloat(rateStr);
-  if (!rate || !ccy || ccy === state.currency) return;
-  try {
-    await api("setFxRate", { projectId: state.projectId, currency: ccy, rate });
-    state.fxRates[ccy] = rate;
-  } catch(e) { /* non-fatal */ }
-}
-
-function renderFxTab() {
-  document.getElementById("fx-base-label").textContent = state.currency;
-  document.getElementById("fx-input-label").textContent = `Rate (1 ${document.getElementById("fx-ccy-input").value} = ? ${state.currency})`;
-  const list   = document.getElementById("fx-rates-list");
-  const entries = Object.entries(state.fxRates);
-  if (!entries.length) {
-    list.innerHTML = `<div class="text-sm text-gray-400 text-center py-6">No FX rates set yet.</div>`;
-    return;
-  }
-  list.innerHTML = entries.map(([ccy, rate]) => `
-    <div class="expense-row">
-      <div>
-        <span class="font-medium text-sm">1 ${esc(ccy)}</span>
-        <span class="text-sm text-gray-400"> = ${rate} ${esc(state.currency)}</span>
-      </div>
-      <span class="pill pill-currency">${esc(ccy)}</span>
-    </div>`).join("");
-}
-</script>
 <style>
   :root {
     --ink:       #1a1a18;
@@ -97,254 +23,66 @@ function renderFxTab() {
     --sans:      'DM Sans', sans-serif;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: var(--paper);
-    color: var(--ink);
-    font-family: var(--sans);
-    font-size: 15px;
-    line-height: 1.6;
-    min-height: 100vh;
-  }
-  /* Ledger line texture */
-  body::before {
-    content: '';
-    position: fixed; inset: 0;
-    background-image: repeating-linear-gradient(
-      transparent 0px, transparent 31px,
-      var(--rule) 31px, var(--rule) 32px
-    );
-    opacity: 0.35;
-    pointer-events: none;
-    z-index: 0;
-  }
+  body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.6; min-height: 100vh; }
+  body::before { content: ''; position: fixed; inset: 0; background-image: repeating-linear-gradient(transparent 0px, transparent 31px, var(--rule) 31px, var(--rule) 32px); opacity: 0.35; pointer-events: none; z-index: 0; }
   #app { position: relative; z-index: 1; }
-
-  /* Typography */
   .serif { font-family: var(--serif); }
-  .mono  { font-family: var(--mono);  }
-
-  /* Inputs */
-  input, select, textarea {
-    font-family: var(--sans);
-    font-size: 14px;
-    background: #fff;
-    border: 1.5px solid var(--rule);
-    border-radius: 4px;
-    padding: 8px 12px;
-    width: 100%;
-    color: var(--ink);
-    transition: border-color .15s;
-    outline: none;
-  }
-  input:focus, select:focus, textarea:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-lt);
-  }
-  label {
-    display: block;
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    color: #888;
-    margin-bottom: 5px;
-  }
-
-  /* Buttons */
-  .btn {
-    font-family: var(--sans);
-    font-size: 13px;
-    font-weight: 500;
-    letter-spacing: .04em;
-    padding: 9px 20px;
-    border-radius: 4px;
-    border: 1.5px solid transparent;
-    cursor: pointer;
-    transition: all .15s;
-    display: inline-flex; align-items: center; gap: 6px;
-  }
-  .btn-primary {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
-  }
+  .mono  { font-family: var(--mono); }
+  input, select, textarea { font-family: var(--sans); font-size: 14px; background: #fff; border: 1.5px solid var(--rule); border-radius: 4px; padding: 8px 12px; width: 100%; color: var(--ink); transition: border-color .15s; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-lt); }
+  label { display: block; font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #888; margin-bottom: 5px; }
+  .btn { font-family: var(--sans); font-size: 13px; font-weight: 500; letter-spacing: .04em; padding: 9px 20px; border-radius: 4px; border: 1.5px solid transparent; cursor: pointer; transition: all .15s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   .btn-primary:hover { background: #a33a0c; }
-  .btn-secondary {
-    background: transparent;
-    color: var(--ink);
-    border-color: var(--rule);
-  }
+  .btn-secondary { background: transparent; color: var(--ink); border-color: var(--rule); }
   .btn-secondary:hover { background: var(--cream); }
-  .btn-ghost {
-    background: transparent;
-    color: #888;
-    border: none;
-    padding: 6px 10px;
-    font-size: 12px;
-  }
+  .btn-ghost { background: transparent; color: #888; border: none; padding: 6px 10px; font-size: 12px; }
   .btn-ghost:hover { color: var(--accent); }
   .btn:disabled { opacity: .45; cursor: not-allowed; }
-
-  /* Cards */
-  .card {
-    background: rgba(255,255,255,.75);
-    backdrop-filter: blur(4px);
-    border: 1.5px solid var(--rule);
-    border-radius: 8px;
-    padding: 24px;
-  }
-
-  /* Pill tags */
-  .pill {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 500;
-    font-family: var(--mono);
-  }
+  .card { background: rgba(255,255,255,.75); backdrop-filter: blur(4px); border: 1.5px solid var(--rule); border-radius: 8px; padding: 24px; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 500; font-family: var(--mono); }
   .pill-currency { background: var(--cream); color: #666; }
   .pill-positive { background: var(--green-lt); color: var(--green); }
   .pill-negative { background: var(--accent-lt); color: var(--accent); }
-
-  /* Tab bar */
-  .tabs { display: flex; border-bottom: 1.5px solid var(--rule); gap: 0; }
-  .tab {
-    padding: 10px 18px;
-    font-size: 13px;
-    font-weight: 500;
-    color: #888;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1.5px;
-    cursor: pointer;
-    transition: all .15s;
-    background: none; border-top: none; border-left: none; border-right: none;
-    font-family: var(--sans);
-  }
+  .tabs { display: flex; border-bottom: 1.5px solid var(--rule); gap: 0; overflow-x: auto; }
+  .tab { padding: 10px 16px; font-size: 13px; font-weight: 500; color: #888; border-bottom: 2px solid transparent; margin-bottom: -1.5px; cursor: pointer; transition: all .15s; background: none; border-top: none; border-left: none; border-right: none; font-family: var(--sans); white-space: nowrap; }
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
   .tab:hover:not(.active) { color: var(--ink); }
-
-  /* Expense row */
-  .expense-row {
-    padding: 12px 0;
-    border-bottom: 1px solid var(--rule);
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 8px;
-    align-items: start;
-    animation: fadeSlide .25s ease;
-  }
+  .expense-row { padding: 12px 0; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; animation: fadeSlide .25s ease; }
   .expense-row:last-child { border-bottom: none; }
-
-  /* Settlement row */
-  .settle-row {
-    display: flex; align-items: center; gap: 12px;
-    padding: 12px 0;
-    border-bottom: 1px dashed var(--rule);
-    animation: fadeSlide .25s ease;
-  }
+  .settle-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px dashed var(--rule); animation: fadeSlide .25s ease; }
   .settle-row:last-child { border-bottom: none; }
   .settle-arrow { color: var(--accent); font-size: 18px; flex-shrink: 0; }
-
-  /* Toast */
-  #toast {
-    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-    background: var(--ink); color: #fff;
-    padding: 10px 20px; border-radius: 6px;
-    font-size: 13px; font-family: var(--mono);
-    opacity: 0; transition: opacity .2s;
-    pointer-events: none; z-index: 9999;
-    white-space: nowrap;
-  }
+  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 20px; border-radius: 6px; font-size: 13px; font-family: var(--mono); opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 9999; white-space: nowrap; }
   #toast.show { opacity: 1; }
-
-  /* Modal */
-  .modal-bg {
-    position: fixed; inset: 0;
-    background: rgba(26,26,24,.5);
-    backdrop-filter: blur(3px);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 100; padding: 16px;
-    animation: fadeIn .15s ease;
-  }
-  .modal {
-    background: var(--paper);
-    border: 1.5px solid var(--rule);
-    border-radius: 10px;
-    padding: 28px;
-    width: 100%; max-width: 480px;
-    max-height: 90vh; overflow-y: auto;
-    animation: slideUp .2s ease;
-  }
-
-  /* Multi-select checkboxes */
+  .modal-bg { position: fixed; inset: 0; background: rgba(26,26,24,.5); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; animation: fadeIn .15s ease; }
+  .modal { background: var(--paper); border: 1.5px solid var(--rule); border-radius: 10px; padding: 28px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; animation: slideUp .2s ease; }
   .check-grid { display: flex; flex-wrap: wrap; gap: 6px; }
-  .check-item {
-    display: flex; align-items: center; gap: 6px;
-    padding: 6px 12px;
-    border: 1.5px solid var(--rule);
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
-    transition: all .12s;
-    user-select: none;
-  }
-  .check-item.checked {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
-  }
+  .check-item { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1.5px solid var(--rule); border-radius: 4px; cursor: pointer; font-size: 13px; transition: all .12s; user-select: none; }
+  .check-item.checked { background: var(--accent); border-color: var(--accent); color: #fff; }
   .check-item input { display: none; }
-
-  /* Spinner */
-  .spin {
-    width: 16px; height: 16px;
-    border: 2px solid #ffffff44;
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: spin .6s linear infinite;
-    display: inline-block;
-  }
-
-  @keyframes fadeSlide {
-    from { opacity: 0; transform: translateY(-6px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes fadeIn {
-    from { opacity: 0; } to { opacity: 1; }
-  }
-  @keyframes slideUp {
-    from { transform: translateY(12px); opacity: 0; }
-    to   { transform: translateY(0); opacity: 1; }
-  }
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-
-  /* Responsive */
-  @media (max-width: 600px) {
-    .modal { padding: 20px; }
-    .card  { padding: 16px; }
-  }
+  .spin { width: 16px; height: 16px; border: 2px solid #ffffff44; border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; display: inline-block; }
+  @keyframes fadeSlide { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideUp { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (max-width: 600px) { .modal { padding: 20px; } .card { padding: 16px; } }
 </style>
 </head>
 <body>
-
 <div id="app">
 
-  <!-- ── LANDING ─────────────────────────────────────── -->
+  <!-- LANDING -->
   <div id="view-landing" class="min-h-screen flex flex-col items-center justify-center px-4 py-12">
     <div class="w-full max-w-sm">
       <div class="text-center mb-10">
         <div class="mono text-xs tracking-widest text-gray-400 mb-3">LEDGER — v1.0</div>
         <h1 class="serif text-5xl mb-3" style="color:var(--ink)">Split<span style="color:var(--accent)">Chinchin</span></h1>
         <p class="text-sm text-gray-500">Shared expenses. Zero fuss.<br>No accounts. No drama.</p>
-      <div class="mt-4">
-        <button class="btn btn-secondary w-full" onclick="showDirectory()">View all projects →</button>
+        <div class="mt-4">
+          <button class="btn btn-secondary w-full" onclick="showDirectory()">View all projects →</button>
+        </div>
       </div>
-      </div>
-
-      <!-- Join existing project -->
       <div class="card mb-4">
         <h2 class="serif text-xl mb-4">Join a project</h2>
         <div class="mb-3">
@@ -355,12 +93,8 @@ function renderFxTab() {
           <label>Your name</label>
           <input id="join-name" type="text" placeholder="How should we call you?">
         </div>
-        <button class="btn btn-primary w-full" onclick="joinProject()">
-          Enter project →
-        </button>
+        <button class="btn btn-primary w-full" onclick="joinProject()">Enter project →</button>
       </div>
-
-      <!-- Create new project -->
       <div class="card">
         <h2 class="serif text-xl mb-4">Start a new project</h2>
         <div class="mb-3">
@@ -381,13 +115,12 @@ function renderFxTab() {
           <label>Your name</label>
           <input id="creator-name" type="text" placeholder="You'll be the first member">
         </div>
-        <button class="btn btn-primary w-full" onclick="createProject()">
-          Create project →
-        </button>
+        <button class="btn btn-primary w-full" onclick="createProject()">Create project →</button>
       </div>
     </div>
   </div>
-<!-- ── DIRECTORY VIEW ──────────────────────────────── -->
+
+  <!-- DIRECTORY VIEW -->
   <div id="view-directory" class="hidden min-h-screen px-4 py-12">
     <div class="w-full max-w-lg mx-auto">
       <div class="flex items-center gap-4 mb-8">
@@ -400,18 +133,15 @@ function renderFxTab() {
     </div>
   </div>
 
-  <!-- ── PROJECT VIEW ─────────────────────────────────── -->
+  <!-- PROJECT VIEW -->
   <div id="view-project" class="hidden min-h-screen">
-
-    <!-- Header -->
-    <header style="background:rgba(245,240,232,.9); backdrop-filter:blur(8px); border-bottom:1.5px solid var(--rule);"
-            class="sticky top-0 z-10 px-4 py-3 flex items-center justify-between">
+    <header style="background:rgba(245,240,232,.9);backdrop-filter:blur(8px);border-bottom:1.5px solid var(--rule);" class="sticky top-0 z-10 px-4 py-3 flex items-center justify-between">
       <div>
         <div id="hdr-name" class="serif text-xl" style="line-height:1.2"></div>
         <div id="hdr-meta" class="mono text-xs text-gray-400 mt-0.5"></div>
       </div>
       <div class="flex items-center gap-2">
-        <button class="btn btn-secondary text-xs py-1.5 px-3" onclick="copyShareLink()" title="Copy share link">
+        <button class="btn btn-secondary text-xs py-1.5 px-3" onclick="copyShareLink()">
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
           Share
         </button>
@@ -419,31 +149,31 @@ function renderFxTab() {
       </div>
     </header>
 
-    <!-- Tabs -->
-    <div class="px-4 pt-2" style="max-width:680px; margin:0 auto;">
+    <div class="px-4 pt-2" style="max-width:680px;margin:0 auto;">
       <div class="tabs">
-        <button class="tab active" data-tab="expenses" onclick="switchTab('expenses', this)">Expenses</button>
-        <button class="tab" data-tab="balances" onclick="switchTab('balances', this)">Balances</button>
-        <button class="tab" data-tab="settle" onclick="switchTab('settle', this)">Settle Up</button>
-        <button class="tab" data-tab="fx" onclick="switchTab('fx', this)">FX Rates</button>
+        <button class="tab active" data-tab="expenses" onclick="switchTab('expenses',this)">Expenses</button>
+        <button class="tab" data-tab="balances" onclick="switchTab('balances',this)">Balances</button>
+        <button class="tab" data-tab="settle" onclick="switchTab('settle',this)">Settle Up</button>
+        <button class="tab" data-tab="fx" onclick="switchTab('fx',this)">FX Rates</button>
       </div>
     </div>
 
     <!-- Tab: Expenses -->
-    <div id="tab-expenses" class="px-4 pb-20" style="max-width:680px; margin:0 auto;">
+    <div id="tab-expenses" class="px-4 pb-20" style="max-width:680px;margin:0 auto;">
       <div class="flex items-center justify-between py-4">
         <div class="mono text-xs text-gray-400" id="exp-count"></div>
         <button class="btn btn-primary" onclick="openAddExpense()">
           <span style="font-size:16px;line-height:1">+</span> Add expense
         </button>
       </div>
+      <div id="exp-summary"></div>
       <div id="expense-list" class="card">
         <div class="text-sm text-gray-400 text-center py-8">No expenses yet.</div>
       </div>
     </div>
 
     <!-- Tab: Balances -->
-    <div id="tab-balances" class="hidden px-4 pb-20" style="max-width:680px; margin:0 auto;">
+    <div id="tab-balances" class="hidden px-4 pb-20" style="max-width:680px;margin:0 auto;">
       <div class="py-4">
         <div class="mono text-xs text-gray-400 mb-1">NET BALANCES</div>
         <div class="text-xs text-gray-400">Positive = owed money · Negative = owes money</div>
@@ -454,7 +184,7 @@ function renderFxTab() {
     </div>
 
     <!-- Tab: Settle Up -->
-    <div id="tab-settle" class="hidden px-4 pb-20" style="max-width:680px; margin:0 auto;">
+    <div id="tab-settle" class="hidden px-4 pb-20" style="max-width:680px;margin:0 auto;">
       <div class="py-4">
         <div class="mono text-xs text-gray-400 mb-1">MINIMUM TRANSACTIONS</div>
         <div class="text-xs text-gray-400">Greedy algorithm — fewest payments to settle all debts</div>
@@ -469,7 +199,7 @@ function renderFxTab() {
     </div>
 
     <!-- Tab: FX Rates -->
-    <div id="tab-fx" class="hidden px-4 pb-20" style="max-width:680px; margin:0 auto;">
+    <div id="tab-fx" class="hidden px-4 pb-20" style="max-width:680px;margin:0 auto;">
       <div class="py-4">
         <div class="mono text-xs text-gray-400 mb-1">FX RATES</div>
         <div class="text-xs text-gray-400">Set how much 1 unit of a foreign currency equals in <strong id="fx-base-label"></strong>. Applies to all settlement calculations.</div>
@@ -479,7 +209,7 @@ function renderFxTab() {
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label>Currency</label>
-              <select id="fx-ccy-input">
+              <select id="fx-ccy-input" onchange="updateFxInputLabel()">
                 <option>USD</option><option>EUR</option><option>GBP</option>
                 <option>SGD</option><option>HKD</option><option>JPY</option>
                 <option>AUD</option><option>CAD</option><option>CNY</option>
@@ -489,7 +219,7 @@ function renderFxTab() {
             </div>
             <div>
               <label id="fx-input-label">Rate (1 XXX = ?)</label>
-              <input id="fx-rate-input" type="number" min="0" step="0.0001" placeholder="e.g. 7.80" oninput="updateFxInputLabel()">
+              <input id="fx-rate-input" type="number" min="0" step="0.0001" placeholder="e.g. 7.80">
             </div>
           </div>
           <button class="btn btn-primary" onclick="saveFxRate()">Save rate</button>
@@ -501,17 +231,24 @@ function renderFxTab() {
     </div>
   </div>
 
-  <!-- ── ADD EXPENSE MODAL ──────────────────────────── -->
-  <div id="modal-expense" class="modal-bg hidden" onclick="closeIfBg(event, 'modal-expense')">
+  <!-- ADD EXPENSE MODAL -->
+  <div id="modal-expense" class="modal-bg hidden" onclick="closeIfBg(event,'modal-expense')">
     <div class="modal">
       <h2 class="serif text-2xl mb-5">New expense</h2>
-
       <div class="grid gap-4">
         <div>
           <label>Item name</label>
           <input id="exp-name" type="text" placeholder="Dinner, taxi, hotel…">
         </div>
-
+        <div>
+          <label>Category</label>
+          <div class="flex gap-2">
+            <select id="exp-category" style="flex:1">
+              <option value="">— None —</option>
+            </select>
+            <button class="btn btn-secondary" style="white-space:nowrap;padding:8px 12px;font-size:12px" onclick="openAddCategory()">+ New</button>
+          </div>
+        </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label>Amount</label>
@@ -528,7 +265,6 @@ function renderFxTab() {
             </select>
           </div>
         </div>
-
         <div id="fx-rate-row" class="hidden">
           <label id="fx-rate-label">FX Rate (1 XXX = ? YYY)</label>
           <div class="flex items-center gap-2">
@@ -537,12 +273,10 @@ function renderFxTab() {
           </div>
           <div class="mono text-xs mt-1" style="color:var(--accent)" id="fx-rate-saved"></div>
         </div>
-
         <div>
           <label>Paid by</label>
           <select id="exp-payer"></select>
         </div>
-
         <div>
           <label>Split between</label>
           <div id="exp-split" class="check-grid mt-1"></div>
@@ -551,7 +285,6 @@ function renderFxTab() {
             <button class="btn btn-ghost text-xs" onclick="clearSplit()">None</button>
           </div>
         </div>
-
         <div class="flex gap-3 pt-2">
           <button class="btn btn-secondary flex-1" onclick="closeModal('modal-expense')">Cancel</button>
           <button id="save-exp-btn" class="btn btn-primary flex-1" onclick="saveExpense()">Save expense</button>
@@ -560,8 +293,8 @@ function renderFxTab() {
     </div>
   </div>
 
-  <!-- ── LOADING OVERLAY ──────────────────────────────── -->
-  <div id="loading" class="hidden" style="position:fixed;inset:0;background:rgba(245,240,232,.75);z-index:200;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <!-- LOADING OVERLAY -->
+  <div id="loading" style="position:fixed;inset:0;background:rgba(245,240,232,.75);z-index:200;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
     <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
       <div style="width:32px;height:32px;border:3px solid var(--rule);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;"></div>
       <div class="mono text-xs text-gray-400" id="loading-msg">Loading…</div>
@@ -573,29 +306,21 @@ function renderFxTab() {
 <div id="toast"></div>
 
 <script>
-// ────────────────────────────────────────────────────────────
-// CONFIG — paste your Apps Script Web App URL here
-// ────────────────────────────────────────────────────────────
 const API_URL = "https://script.google.com/macros/s/AKfycbz7r7R0tAxzgDT7liIwxew6-3FpHmcsv9CRmBoNtJN6qSs7_0Ae_GwP74O3s08tcOcCEw/exec";
 
-// ────────────────────────────────────────────────────────────
-// STATE
-// ────────────────────────────────────────────────────────────
 let state = {
-  projectId: null,
-  project:   null,
-  members:   [],
-  expenses:  [],
-  fxRates:   {},
-  me:        null,
-  currency:  "USD",
+  projectId:  null,
+  project:    null,
+  members:    [],
+  expenses:   [],
+  fxRates:    {},
+  categories: [],
+  me:         null,
+  currency:   "USD",
 };
 
-// ────────────────────────────────────────────────────────────
-// INIT
-// ────────────────────────────────────────────────────────────
+// ── INIT ──────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
-  // Check if URL contains a project ID
   const params = new URLSearchParams(location.search);
   const pid    = params.get("p");
   if (pid) {
@@ -605,7 +330,6 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 function parseProjectInput(val) {
-  // Accept full URL or bare ID
   try {
     const url = new URL(val);
     const p   = url.searchParams.get("p");
@@ -613,12 +337,10 @@ function parseProjectInput(val) {
   } catch {}
 }
 
-// ────────────────────────────────────────────────────────────
-// API HELPER
-// ────────────────────────────────────────────────────────────
-function api(action, params = {}, body = null) {
+// ── API (JSONP) ───────────────────────────────────────────
+function api(action, params = {}) {
   return new Promise((resolve, reject) => {
-    const allParams = { action, ...params, ...(body || {}) };
+    const allParams = { action, ...params };
     if (Array.isArray(allParams.splitBetween))
       allParams.splitBetween = allParams.splitBetween.join(",");
 
@@ -638,21 +360,18 @@ function api(action, params = {}, body = null) {
 
     const s = document.createElement("script");
     s.src = url.toString();
-    s.onerror = () => { delete window[cbName]; reject(new Error("Failed to reach server. Check your API_URL.")); };
+    s.onerror = () => { delete window[cbName]; reject(new Error("Failed to reach server.")); };
     document.getElementById("jsonp-container").appendChild(s);
   });
 }
 
-// ────────────────────────────────────────────────────────────
-// PROJECT CREATION / JOINING
-// ────────────────────────────────────────────────────────────
+// ── PROJECT CREATE / JOIN ────────────────────────────────
 async function createProject() {
   const name     = v("new-name").trim();
   const currency = v("new-currency");
   const myName   = v("creator-name").trim();
   if (!name)   return toast("Enter a project name");
   if (!myName) return toast("Enter your name");
-
   showLoading("Creating project…");
   try {
     const res = await api("createProject", { name, currency });
@@ -660,7 +379,7 @@ async function createProject() {
     saveLocalMe(res.projectId, mem.memberId, myName);
     await loadProject(res.projectId);
     updateURL(res.projectId);
-  } catch (e) { toast(e.message); }
+  } catch(e) { toast(e.message); }
   finally { hideLoading(); }
 }
 
@@ -669,20 +388,17 @@ async function joinProject() {
   const myName    = v("join-name").trim();
   if (!projectId) return toast("Enter a project ID");
   if (!myName)    return toast("Enter your name");
-
   showLoading("Joining project…");
   try {
     const mem = await api("addMember", { projectId, name: myName });
     saveLocalMe(projectId, mem.memberId, myName);
     await loadProject(projectId);
     updateURL(projectId);
-  } catch (e) { toast(e.message); }
+  } catch(e) { toast(e.message); }
   finally { hideLoading(); }
 }
 
-// ────────────────────────────────────────────────────────────
-// LOAD PROJECT
-// ────────────────────────────────────────────────────────────
+// ── LOAD PROJECT ─────────────────────────────────────────
 async function loadProject(projectId) {
   showLoading("Loading project…");
   try {
@@ -690,36 +406,27 @@ async function loadProject(projectId) {
       api("getProject", { projectId }),
       api("getExpenses", { projectId }),
     ]);
-
-    state.projectId = projectId;
-    state.project   = projRes.project;
-    state.members   = projRes.members;
-    state.expenses  = expRes.expenses;
-    state.fxRates   = projRes.fxRates || {};
-    state.currency  = projRes.project.defaultCurrency || "USD";
-
-    // Restore local me
+    state.projectId  = projectId;
+    state.project    = projRes.project;
+    state.members    = projRes.members;
+    state.expenses   = expRes.expenses;
+    state.fxRates    = projRes.fxRates || {};
+    state.categories = projRes.categories || [];
+    state.currency   = projRes.project.defaultCurrency || "USD";
     const saved = loadLocalMe(projectId);
-    state.me    = saved || null;
-
+    state.me = saved || null;
     renderProject();
     show("view-project");
     hide("view-landing");
-  } catch (e) { toast("Error: " + e.message); }
+  } catch(e) { toast("Error: " + e.message); }
   finally { hideLoading(); }
 }
 
-// ────────────────────────────────────────────────────────────
-// RENDER
-// ────────────────────────────────────────────────────────────
+// ── RENDER ───────────────────────────────────────────────
 function renderProject() {
-  const { project, members, expenses } = state;
-
-  // Header
-  document.getElementById("hdr-name").textContent = project.name;
+  document.getElementById("hdr-name").textContent = state.project.name;
   document.getElementById("hdr-meta").textContent =
-    `${project.projectId} · ${members.length} member${members.length !== 1 ? "s" : ""}`;
-
+    `${state.project.projectId} · ${state.members.length} member${state.members.length !== 1 ? "s" : ""}`;
   renderExpenses();
 }
 
@@ -727,31 +434,67 @@ function renderExpenses() {
   const { expenses, members, currency } = state;
   const list = document.getElementById("expense-list");
   const cnt  = document.getElementById("exp-count");
-
   cnt.textContent = `${expenses.length} expense${expenses.length !== 1 ? "s" : ""}`;
 
   if (!expenses.length) {
     list.innerHTML = `<div class="text-sm text-gray-400 text-center py-8">No expenses yet. Add the first one!</div>`;
+    document.getElementById("exp-summary").innerHTML = "";
     return;
   }
 
   const memberMap = {};
   members.forEach(m => memberMap[m.memberId] = m.name);
 
-  // Sort newest first
+  // Totals
+  const byPerson   = {};
+  const byCategory = {};
+  let grandTotal   = 0;
+  members.forEach(m => byPerson[m.name] = 0);
+  expenses.forEach(exp => {
+    const amt = parseFloat(exp.amount) || 0;
+    grandTotal += amt;
+    if (byPerson[exp.payerName] !== undefined) byPerson[exp.payerName] += amt;
+    const cat = (exp.category && exp.category.toString().trim()) ? exp.category : "Uncategorised";
+    byCategory[cat] = (byCategory[cat] || 0) + amt;
+  });
+
+  const personRows = Object.entries(byPerson)
+    .filter(([,val]) => val > 0).sort(([,a],[,b]) => b - a)
+    .map(([name, total]) => `
+      <div class="flex justify-between text-xs py-1" style="border-bottom:1px solid var(--rule)">
+        <span>${esc(name)}</span><span class="mono font-medium">${formatAmt(total)} ${currency}</span>
+      </div>`).join("");
+
+  const catRows = Object.entries(byCategory)
+    .sort(([,a],[,b]) => b - a)
+    .map(([cat, total]) => `
+      <div class="flex justify-between text-xs py-1" style="border-bottom:1px solid var(--rule)">
+        <span>${esc(cat)}</span><span class="mono font-medium">${formatAmt(total)} ${currency}</span>
+      </div>`).join("");
+
+  document.getElementById("exp-summary").innerHTML = `
+    <div class="card mb-4" style="padding:16px">
+      <div class="flex justify-between items-center mb-3">
+        <div class="mono text-xs tracking-widest text-gray-400">PROJECT TOTAL</div>
+        <div class="mono font-medium" style="color:var(--accent)">${formatAmt(grandTotal)} ${currency}</div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div><div class="mono text-xs text-gray-400 mb-1">BY PERSON</div>${personRows}</div>
+        <div><div class="mono text-xs text-gray-400 mb-1">BY CATEGORY</div>${catRows}</div>
+      </div>
+    </div>`;
+
   const sorted = [...expenses].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
-
   list.innerHTML = sorted.map(exp => {
-    const splitNames = exp.splitBetween
-      .map(id => memberMap[id] || id)
-      .join(", ");
-    const date = new Date(exp.createdAt).toLocaleDateString("en-GB", { day:"numeric", month:"short" });
+    const splitNames = exp.splitBetween.map(id => memberMap[id] || id).join(", ");
+    const date  = new Date(exp.createdAt).toLocaleDateString("en-GB", { day:"numeric", month:"short" });
     const isMine = state.me && exp.payerId === state.me.memberId;
-
+    const catPill = (exp.category && exp.category.toString().trim())
+      ? `<span class="pill pill-currency" style="margin-left:4px">${esc(exp.category)}</span>` : "";
     return `
       <div class="expense-row">
         <div>
-          <div class="font-medium text-sm">${esc(exp.itemName)}</div>
+          <div class="font-medium text-sm">${esc(exp.itemName)} ${catPill}</div>
           <div class="text-xs text-gray-400 mt-0.5">
             Paid by <strong>${esc(exp.payerName)}</strong>${isMine ? ' <span style="color:var(--accent)">· you</span>' : ''}
             · Split: ${esc(splitNames)}
@@ -772,22 +515,22 @@ function renderExpenses() {
 }
 
 async function renderBalancesAndSettle() {
-  const { projectId } = state;
   showLoading("Calculating…");
   try {
-    const res = await api("getSettlement", { projectId });
-    renderBalances(res.balances, res.baseCcy);
+    const res = await api("getSettlement", { projectId: state.projectId });
+    renderBalances(res.balances, res.baseCcy, res.missingFx);
     renderSettle(res.transactions, res.baseCcy, res.missingFx);
-  } catch (e) { toast(e.message); }
+  } catch(e) { toast(e.message); }
   finally { hideLoading(); }
 }
 
-function renderBalances(balances, baseCcy) {
+function renderBalances(balances, baseCcy, missingFx) {
   const list = document.getElementById("balance-list");
   if (!balances || !balances.length) {
     list.innerHTML = `<div class="text-sm text-gray-400 text-center py-8">No data yet.</div>`;
     return;
   }
+  if (missingFx && missingFx.length) toast("⚠️ Missing FX rates for: " + missingFx.join(", "));
   const sorted = [...balances].sort((a,b) => b.net - a.net);
   list.innerHTML = sorted.map(b => {
     const cls  = b.net > 0 ? "pill-positive" : b.net < 0 ? "pill-negative" : "pill-currency";
@@ -801,7 +544,7 @@ function renderBalances(balances, baseCcy) {
 }
 
 function renderSettle(transactions, baseCcy, missingFx) {
-  const warn = document.getElementById("settle-missing-fx");
+  const warn  = document.getElementById("settle-missing-fx");
   const wlist = document.getElementById("settle-missing-list");
   if (missingFx && missingFx.length) {
     warn.classList.remove("hidden");
@@ -812,10 +555,7 @@ function renderSettle(transactions, baseCcy, missingFx) {
   const ccy  = baseCcy || state.currency;
   const list = document.getElementById("settle-list");
   if (!transactions || !transactions.length) {
-    list.innerHTML = `<div class="text-center py-8">
-      <div style="font-size:2rem;margin-bottom:8px">🎉</div>
-      <div class="text-sm text-gray-400">Everyone's even! Nothing to settle.</div>
-    </div>`;
+    list.innerHTML = `<div class="text-center py-8"><div style="font-size:2rem;margin-bottom:8px">🎉</div><div class="text-sm text-gray-400">Everyone's even!</div></div>`;
     return;
   }
   list.innerHTML = transactions.map(t => `
@@ -827,26 +567,106 @@ function renderSettle(transactions, baseCcy, missingFx) {
     </div>`).join("");
 }
 
-// ────────────────────────────────────────────────────────────
-// EXPENSE MODAL
-// ────────────────────────────────────────────────────────────
+// ── FX RATES ─────────────────────────────────────────────
+function onExpCurrencyChange(ccy) {
+  const row   = document.getElementById("fx-rate-row");
+  const label = document.getElementById("fx-rate-label");
+  const hint  = document.getElementById("fx-rate-hint");
+  const saved = document.getElementById("fx-rate-saved");
+  const base  = state.currency;
+  if (ccy === base) { row.classList.add("hidden"); return; }
+  row.classList.remove("hidden");
+  label.textContent = `FX Rate (1 ${ccy} = ? ${base})`;
+  hint.textContent  = `→ ${base}`;
+  const existing = state.fxRates[ccy];
+  if (existing) {
+    document.getElementById("exp-fx-rate").value = existing;
+    saved.textContent = "Using saved rate: " + existing;
+  } else {
+    document.getElementById("exp-fx-rate").value = "";
+    saved.textContent = "No rate saved yet — enter one to save";
+  }
+}
+
+function updateFxInputLabel() {
+  const ccy  = document.getElementById("fx-ccy-input").value;
+  document.getElementById("fx-input-label").textContent = `Rate (1 ${ccy} = ? ${state.currency})`;
+}
+
+async function saveFxRate() {
+  const ccy  = document.getElementById("fx-ccy-input").value;
+  const rate = parseFloat(document.getElementById("fx-rate-input").value);
+  if (!rate || rate <= 0) return toast("Enter a valid rate");
+  if (ccy === state.currency) return toast("That's already the base currency");
+  showLoading("Saving rate…");
+  try {
+    await api("setFxRate", { projectId: state.projectId, currency: ccy, rate });
+    state.fxRates[ccy] = rate;
+    renderFxTab();
+    toast(`Saved: 1 ${ccy} = ${rate} ${state.currency}`);
+  } catch(e) { toast(e.message); }
+  finally { hideLoading(); }
+}
+
+async function maybeSaveFxFromExpense(ccy, rateStr) {
+  const rate = parseFloat(rateStr);
+  if (!rate || !ccy || ccy === state.currency) return;
+  try {
+    await api("setFxRate", { projectId: state.projectId, currency: ccy, rate });
+    state.fxRates[ccy] = rate;
+  } catch(e) {}
+}
+
+function renderFxTab() {
+  document.getElementById("fx-base-label").textContent = state.currency;
+  updateFxInputLabel();
+  const list    = document.getElementById("fx-rates-list");
+  const entries = Object.entries(state.fxRates);
+  if (!entries.length) {
+    list.innerHTML = `<div class="text-sm text-gray-400 text-center py-6">No FX rates set yet.</div>`;
+    return;
+  }
+  list.innerHTML = entries.map(([ccy, rate]) => `
+    <div class="expense-row">
+      <div><span class="font-medium text-sm">1 ${esc(ccy)}</span>
+      <span class="text-sm text-gray-400"> = ${rate} ${esc(state.currency)}</span></div>
+      <span class="pill pill-currency">${esc(ccy)}</span>
+    </div>`).join("");
+}
+
+// ── CATEGORIES ───────────────────────────────────────────
+async function openAddCategory() {
+  const name = prompt("New category name:");
+  if (!name || !name.trim()) return;
+  try {
+    const res = await api("addCategory", { projectId: state.projectId, name: name.trim() });
+    if (!res.existing) state.categories.push({ categoryId: res.categoryId, name: res.name });
+    const catSel = document.getElementById("exp-category");
+    if (catSel) {
+      catSel.innerHTML = `<option value="">— None —</option>` +
+        state.categories.map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
+      catSel.value = res.name;
+    }
+    toast("Category added: " + res.name);
+  } catch(e) { toast(e.message); }
+}
+
+// ── EXPENSE MODAL ────────────────────────────────────────
 function openAddExpense() {
   if (!state.members.length) return toast("No members in project yet");
 
-  // Populate payer dropdown
   const payerSel = document.getElementById("exp-payer");
   payerSel.innerHTML = state.members.map(m =>
-    `<option value="${m.memberId}">${esc(m.name)}</option>`
-  ).join("");
-
-  // Pre-select current user
+    `<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
   if (state.me) payerSel.value = state.me.memberId;
 
-  // Set default currency
-  const curr = document.getElementById("exp-currency");
-  curr.value = state.currency;
+  document.getElementById("exp-currency").value = state.currency;
+  document.getElementById("fx-rate-row").classList.add("hidden");
 
-  // Populate split checkboxes — default all checked
+  const catSel = document.getElementById("exp-category");
+  catSel.innerHTML = `<option value="">— None —</option>` +
+    state.categories.map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
+
   const splitDiv = document.getElementById("exp-split");
   splitDiv.innerHTML = state.members.map(m => `
     <label class="check-item checked" data-id="${m.memberId}">
@@ -854,7 +674,7 @@ function openAddExpense() {
       ${esc(m.name)}
     </label>`).join("");
 
-splitDiv.querySelectorAll(".check-item").forEach(el => {
+  splitDiv.querySelectorAll(".check-item").forEach(el => {
     el.addEventListener("click", (e) => {
       e.preventDefault();
       el.classList.toggle("checked");
@@ -870,21 +690,21 @@ async function saveExpense() {
   const itemName     = v("exp-name").trim();
   const amount       = parseFloat(v("exp-amount"));
   const currency     = v("exp-currency");
+  const category     = v("exp-category");
   const payerSel     = document.getElementById("exp-payer");
   const payerId      = payerSel.value;
   const payerName    = payerSel.options[payerSel.selectedIndex].text;
   const splitBetween = [...document.querySelectorAll("#exp-split .check-item.checked")]
     .map(el => el.dataset.id);
 
-  if (!itemName)          return toast("Enter an item name");
-  if (!amount || amount <= 0) return toast("Enter a valid amount");
-  if (!splitBetween.length)   return toast("Select at least one person to split with");
+  if (!itemName)               return toast("Enter an item name");
+  if (!amount || amount <= 0)  return toast("Enter a valid amount");
+  if (!splitBetween.length)    return toast("Select at least one person to split with");
 
   const btn = document.getElementById("save-exp-btn");
   btn.disabled = true;
   btn.innerHTML = `<span class="spin"></span> Saving…`;
 
-  // Save FX rate if user entered one for a foreign currency
   const fxRateVal = document.getElementById("exp-fx-rate").value;
   if (currency !== state.currency && fxRateVal) {
     await maybeSaveFxFromExpense(currency, fxRateVal);
@@ -893,19 +713,16 @@ async function saveExpense() {
   try {
     await api("addExpense", {
       projectId: state.projectId, itemName, amount, currency,
-      payerId, payerName, splitBetween,
+      payerId, payerName, splitBetween, category,
     });
-
-    // Refresh expense list
     const expRes = await api("getExpenses", { projectId: state.projectId });
     state.expenses = expRes.expenses;
     renderExpenses();
     closeModal("modal-expense");
     toast("Expense added ✓");
-    // Clear form
     document.getElementById("exp-name").value   = "";
     document.getElementById("exp-amount").value = "";
-  } catch (e) { toast(e.message); }
+  } catch(e) { toast(e.message); }
   finally {
     btn.disabled = false;
     btn.textContent = "Save expense";
@@ -921,13 +738,11 @@ async function deleteExpense(expenseId) {
     state.expenses = expRes.expenses;
     renderExpenses();
     toast("Deleted");
-  } catch (e) { toast(e.message); }
+  } catch(e) { toast(e.message); }
   finally { hideLoading(); }
 }
 
-// ────────────────────────────────────────────────────────────
-// SPLIT HELPERS
-// ────────────────────────────────────────────────────────────
+// ── SPLIT HELPERS ────────────────────────────────────────
 function selectAllSplit() {
   document.querySelectorAll("#exp-split .check-item").forEach(el => {
     el.classList.add("checked");
@@ -941,9 +756,7 @@ function clearSplit() {
   });
 }
 
-// ────────────────────────────────────────────────────────────
-// TABS
-// ────────────────────────────────────────────────────────────
+// ── TABS ─────────────────────────────────────────────────
 function switchTab(name, btn) {
   ["expenses","balances","settle","fx"].forEach(t => {
     document.getElementById("tab-"+t).classList.add("hidden");
@@ -955,66 +768,13 @@ function switchTab(name, btn) {
   if (name === "fx") renderFxTab();
 }
 
-// ────────────────────────────────────────────────────────────
-// UTILS
-// ────────────────────────────────────────────────────────────
-function v(id)    { return document.getElementById(id).value; }
-function show(id) { document.getElementById(id).classList.remove("hidden"); }
-function hide(id) { document.getElementById(id).classList.add("hidden"); }
-
-function showModal(id) { document.getElementById(id).classList.remove("hidden"); }
-function closeModal(id){ document.getElementById(id).classList.add("hidden"); }
-function closeIfBg(e, id) { if (e.target.id === id) closeModal(id); }
-
-function showLoading(msg) {
-  document.getElementById("loading-msg").textContent = msg || "Loading…";
-  const el = document.getElementById("loading");
-  el.style.display = "flex";
-}
-function hideLoading() {
-  document.getElementById("loading").style.display = "none";
-}
-
-let toastTimer;
-function toast(msg) {
-  const el = document.getElementById("toast");
-  el.textContent = msg;
-  el.classList.add("show");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove("show"), 2800);
-}
-
-function formatAmt(n) {
-  const num = parseFloat(n) || 0;
-  return num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function esc(s) {
-  return String(s || "")
-    .replace(/&/g,"&amp;").replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-}
-
-function updateURL(projectId) {
-  const url = new URL(location.href);
-  url.searchParams.set("p", projectId);
-  history.replaceState({}, "", url.toString());
-}
-
-function copyShareLink() {
-  const url = new URL(location.href);
-  url.searchParams.set("p", state.projectId);
-  navigator.clipboard.writeText(url.toString())
-    .then(() => toast("Share link copied!"))
-    .catch(() => toast("Copy failed — copy the URL manually"));
-}
-// ── DIRECTORY ──────────────────────────────────────────────
+// ── DIRECTORY ────────────────────────────────────────────
 async function showDirectory() {
   hide("view-landing");
   show("view-directory");
   showLoading("Loading projects…");
   try {
-    const res = await api("getAllProjects");
+    const res  = await api("getAllProjects");
     const list = document.getElementById("directory-list");
     if (!res.projects || !res.projects.length) {
       list.innerHTML = `<div class="text-sm text-gray-400 text-center py-8">No projects yet.</div>`;
@@ -1028,11 +788,12 @@ async function showDirectory() {
             <div class="mono text-xs text-gray-400">${esc(p.defaultCurrency)} · ${p.members.length} member${p.members.length !== 1 ? "s" : ""}</div>
           </div>
         </div>
-        ${p.members.length ? `<div class="check-grid mb-2">${p.members.map(m => `
-          <label class="check-item" data-project="${esc(p.projectId)}" data-member="${esc(m.memberId)}" data-name="${esc(m.name)}" onclick="selectDirectoryMember(this)">
-            ${esc(m.name)}
-          </label>`).join("")}
-          <label class="check-item" style="font-style:italic;color:#aaa" onclick="newMemberJoin('${esc(p.projectId)}','${esc(p.name)}')">+ New</label>
+        ${p.members.length ? `<div class="check-grid mb-2">
+          ${p.members.map(m => `
+            <label class="check-item" data-project="${esc(p.projectId)}" data-member="${esc(m.memberId)}" data-name="${esc(m.name)}" onclick="selectDirectoryMember(this)">
+              ${esc(m.name)}
+            </label>`).join("")}
+          <label class="check-item" style="font-style:italic;color:#888" onclick="newMemberJoin('${esc(p.projectId)}','${esc(p.name)}')">+ New member</label>
         </div>` : `<button class="btn btn-secondary text-xs" onclick="newMemberJoin('${esc(p.projectId)}','${esc(p.name)}')">Join →</button>`}
       </div>`).join("");
   } catch(e) { toast(e.message); }
@@ -1060,19 +821,68 @@ async function selectDirectoryMember(el) {
 
 function newMemberJoin(projectId, projectName) {
   hideDirectory();
-  document.getElementById("join-id").value = projectId;
+  document.getElementById("join-id").value   = projectId;
   document.getElementById("join-name").value = "";
   document.getElementById("join-name").focus();
   toast("Enter your name to join " + projectName);
 }
+
+// ── UTILS ────────────────────────────────────────────────
+function v(id)    { return document.getElementById(id).value; }
+function show(id) { document.getElementById(id).classList.remove("hidden"); }
+function hide(id) { document.getElementById(id).classList.add("hidden"); }
+function showModal(id)  { document.getElementById(id).classList.remove("hidden"); }
+function closeModal(id) { document.getElementById(id).classList.add("hidden"); }
+function closeIfBg(e, id) { if (e.target.id === id) closeModal(id); }
+
+function showLoading(msg) {
+  document.getElementById("loading-msg").textContent = msg || "Loading…";
+  document.getElementById("loading").style.display = "flex";
+}
+function hideLoading() {
+  document.getElementById("loading").style.display = "none";
+}
+
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2800);
+}
+
+function formatAmt(n) {
+  return (parseFloat(n) || 0).toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 });
+}
+
+function esc(s) {
+  return String(s || "")
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function updateURL(projectId) {
+  const url = new URL(location.href);
+  url.searchParams.set("p", projectId);
+  history.replaceState({}, "", url.toString());
+}
+
+function copyShareLink() {
+  const url = new URL(location.href);
+  url.searchParams.set("p", state.projectId);
+  navigator.clipboard.writeText(url.toString())
+    .then(() => toast("Share link copied!"))
+    .catch(() => toast("Copy the URL from your browser bar"));
+}
+
 function goHome() {
   hide("view-project");
   show("view-landing");
   history.replaceState({}, "", location.pathname);
-  state = { projectId:null, project:null, members:[], expenses:[], fxRates:{}, me:null, currency:"USD" };
+  state = { projectId:null, project:null, members:[], expenses:[], fxRates:{}, categories:[], me:null, currency:"USD" };
 }
 
-// Local storage helpers to remember who you are
 function saveLocalMe(projectId, memberId, name) {
   try { localStorage.setItem("ss_me_"+projectId, JSON.stringify({ memberId, name })); } catch {}
   state.me = { memberId, name };
