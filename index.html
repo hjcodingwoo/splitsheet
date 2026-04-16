@@ -10,296 +10,304 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   :root {
-    --ink:       #1a1a18;
-    --paper:     #f5f0e8;
-    --cream:     #ede8dc;
-    --rule:      #d4cfc3;
-    --accent:    #c1440e;
-    --accent-lt: #f4e0d8;
-    --green:     #2d6a4f;
-    --green-lt:  #d8eee5;
-    --mono:      'DM Mono', monospace;
-    --serif:     'DM Serif Display', serif;
-    --sans:      'DM Sans', sans-serif;
+    --ink:#1a1a18;--paper:#f5f0e8;--cream:#ede8dc;--rule:#d4cfc3;
+    --accent:#c1440e;--accent-lt:#f4e0d8;--green:#2d6a4f;--green-lt:#d8eee5;
+    --mono:'DM Mono',monospace;--serif:'DM Serif Display',serif;--sans:'DM Sans',sans-serif;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.6; min-height: 100vh; }
-  body::before { content: ''; position: fixed; inset: 0; background-image: repeating-linear-gradient(transparent 0px, transparent 31px, var(--rule) 31px, var(--rule) 32px); opacity: 0.35; pointer-events: none; z-index: 0; }
-  #app { position: relative; z-index: 1; }
-  .serif { font-family: var(--serif); }
-  .mono  { font-family: var(--mono); }
-  input, select, textarea { font-family: var(--sans); font-size: 14px; background: #fff; border: 1.5px solid var(--rule); border-radius: 4px; padding: 8px 12px; width: 100%; color: var(--ink); transition: border-color .15s; outline: none; }
-  input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-lt); }
-  label { display: block; font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #888; margin-bottom: 5px; }
-  .btn { font-family: var(--sans); font-size: 13px; font-weight: 500; letter-spacing: .04em; padding: 9px 20px; border-radius: 4px; border: 1.5px solid transparent; cursor: pointer; transition: all .15s; display: inline-flex; align-items: center; gap: 6px; }
-  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .btn-primary:hover { background: #a33a0c; }
-  .btn-secondary { background: transparent; color: var(--ink); border-color: var(--rule); }
-  .btn-secondary:hover { background: var(--cream); }
-  .btn-ghost { background: transparent; color: #888; border: none; padding: 6px 10px; font-size: 12px; }
-  .btn-ghost:hover { color: var(--accent); }
-  .btn:disabled { opacity: .45; cursor: not-allowed; }
-  .card { background: rgba(255,255,255,.75); backdrop-filter: blur(4px); border: 1.5px solid var(--rule); border-radius: 8px; padding: 24px; }
-  .pill { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 500; font-family: var(--mono); }
-  .pill-currency { background: var(--cream); color: #666; }
-  .pill-positive { background: var(--green-lt); color: var(--green); }
-  .pill-negative { background: var(--accent-lt); color: var(--accent); }
-  .tabs { display: flex; border-bottom: 1.5px solid var(--rule); gap: 0; overflow-x: auto; }
-  .tab { padding: 10px 16px; font-size: 13px; font-weight: 500; color: #888; border-bottom: 2px solid transparent; margin-bottom: -1.5px; cursor: pointer; transition: all .15s; background: none; border-top: none; border-left: none; border-right: none; font-family: var(--sans); white-space: nowrap; }
-  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .tab:hover:not(.active) { color: var(--ink); }
-  .expense-row { padding: 12px 0; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; animation: fadeSlide .25s ease; }
-  .expense-row:last-child { border-bottom: none; }
-  .settle-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px dashed var(--rule); animation: fadeSlide .25s ease; }
-  .settle-row:last-child { border-bottom: none; }
-  .settle-arrow { color: var(--accent); font-size: 18px; flex-shrink: 0; }
-  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 20px; border-radius: 6px; font-size: 13px; font-family: var(--mono); opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 9999; white-space: nowrap; }
-  #toast.show { opacity: 1; }
-  .modal-bg { position: fixed; inset: 0; background: rgba(26,26,24,.5); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; animation: fadeIn .15s ease; }
-  .modal { background: var(--paper); border: 1.5px solid var(--rule); border-radius: 10px; padding: 28px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; animation: slideUp .2s ease; }
-  .check-grid { display: flex; flex-wrap: wrap; gap: 6px; }
-  .check-item { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1.5px solid var(--rule); border-radius: 4px; cursor: pointer; font-size: 13px; transition: all .12s; user-select: none; }
-  .check-item.checked { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .check-item input { display: none; }
-  .spin { width: 16px; height: 16px; border: 2px solid #ffffff44; border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; display: inline-block; }
-  @keyframes fadeSlide { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes slideUp { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  @media (max-width: 600px) { .modal { padding: 20px; } .card { padding: 16px; } }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6;min-height:100vh;}
+  body::before{content:'';position:fixed;inset:0;background-image:repeating-linear-gradient(transparent 0px,transparent 31px,var(--rule) 31px,var(--rule) 32px);opacity:.35;pointer-events:none;z-index:0;}
+  #app{position:relative;z-index:1;}
+  input,select{font-family:var(--sans);font-size:14px;background:#fff;border:1.5px solid var(--rule);border-radius:4px;padding:8px 12px;width:100%;color:var(--ink);transition:border-color .15s;outline:none;}
+  input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-lt);}
+  label{display:block;font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#888;margin-bottom:5px;}
+  .btn{font-family:var(--sans);font-size:13px;font-weight:500;letter-spacing:.04em;padding:9px 20px;border-radius:4px;border:1.5px solid transparent;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
+  .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btn-primary:hover{background:#a33a0c;}
+  .btn-secondary{background:transparent;color:var(--ink);border-color:var(--rule);}
+  .btn-secondary:hover{background:var(--cream);}
+  .btn-ghost{background:transparent;color:#888;border:none;padding:6px 10px;font-size:12px;}
+  .btn-ghost:hover{color:var(--accent);}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+  .card{background:rgba(255,255,255,.75);backdrop-filter:blur(4px);border:1.5px solid var(--rule);border-radius:8px;padding:24px;}
+  .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;font-family:var(--mono);}
+  .pill-currency{background:var(--cream);color:#666;}
+  .pill-positive{background:var(--green-lt);color:var(--green);}
+  .pill-negative{background:var(--accent-lt);color:var(--accent);}
+  .tabs{display:flex;border-bottom:1.5px solid var(--rule);overflow-x:auto;}
+  .tab{padding:10px 16px;font-size:13px;font-weight:500;color:#888;border-bottom:2px solid transparent;margin-bottom:-1.5px;cursor:pointer;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;font-family:var(--sans);white-space:nowrap;}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+  .tab:hover:not(.active){color:var(--ink);}
+  .expense-row{padding:12px 0;border-bottom:1px solid var(--rule);display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start;animation:fadeSlide .25s ease;}
+  .expense-row:last-child{border-bottom:none;}
+  .settle-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px dashed var(--rule);animation:fadeSlide .25s ease;}
+  .settle-row:last-child{border-bottom:none;}
+  .settle-arrow{color:var(--accent);font-size:18px;flex-shrink:0;}
+  #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 20px;border-radius:6px;font-size:13px;font-family:var(--mono);opacity:0;transition:opacity .2s;pointer-events:none;z-index:9999;white-space:nowrap;}
+  #toast.show{opacity:1;}
+  .modal-bg{position:fixed;inset:0;background:rgba(26,26,24,.5);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px;animation:fadeIn .15s ease;}
+  .modal{background:var(--paper);border:1.5px solid var(--rule);border-radius:10px;padding:28px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;animation:slideUp .2s ease;}
+  .check-grid{display:flex;flex-wrap:wrap;gap:6px;}
+  .check-item{display:flex;align-items:center;gap:6px;padding:6px 12px;border:1.5px solid var(--rule);border-radius:4px;cursor:pointer;font-size:13px;transition:all .12s;user-select:none;}
+  .check-item.checked{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .check-item input{display:none;}
+  .spin{width:16px;height:16px;border:2px solid #ffffff44;border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;display:inline-block;}
+  /* Total tab */
+  .stat-card{background:rgba(255,255,255,.85);border:1.5px solid var(--rule);border-radius:10px;padding:20px;text-align:center;}
+  .member-chip{padding:8px 16px;border-radius:20px;border:1.5px solid var(--rule);cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;background:rgba(255,255,255,.6);}
+  .member-chip.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+  @keyframes fadeSlide{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+  @keyframes slideUp{from{transform:translateY(12px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  @media(max-width:600px){.modal{padding:20px;}.card{padding:16px;}}
 </style>
 </head>
 <body>
 <div id="app">
 
-  <!-- LANDING -->
-  <div id="view-landing" class="min-h-screen flex flex-col items-center justify-center px-4 py-12">
-    <div class="w-full max-w-sm">
-      <div class="text-center mb-10">
-        <div class="mono text-xs tracking-widest text-gray-400 mb-3">LEDGER — v1.0</div>
-        <h1 class="serif text-5xl mb-3" style="color:var(--ink)">Split<span style="color:var(--accent)">Chinchin</span></h1>
-        <p class="text-sm text-gray-500">Shared expenses. Zero fuss.<br>No accounts. No drama.</p>
-        <div class="mt-4">
-          <button class="btn btn-secondary w-full" onclick="showDirectory()">View all projects →</button>
-        </div>
+<!-- LANDING -->
+<div id="view-landing" class="min-h-screen flex flex-col items-center justify-center px-4 py-12">
+  <div class="w-full max-w-sm">
+    <div class="text-center mb-10">
+      <div style="font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:#aaa;margin-bottom:12px">LEDGER — v1.0</div>
+      <h1 style="font-family:var(--serif);font-size:3rem;color:var(--ink)">Split<span style="color:var(--accent)">Chinchin</span></h1>
+      <p class="text-sm text-gray-500 mt-2">Shared expenses. Zero fuss.<br>No accounts. No drama.</p>
+      <div class="mt-4">
+        <button class="btn btn-secondary w-full" onclick="showDirectory()">View all projects →</button>
       </div>
-      <div class="card mb-4">
-        <h2 class="serif text-xl mb-4">Join a project</h2>
-        <div class="mb-3">
-          <label>Project ID</label>
-          <input id="join-id" type="text" placeholder="Paste project ID or link" oninput="parseProjectInput(this.value)">
-        </div>
-        <div class="mb-4">
-          <label>Your name</label>
-          <input id="join-name" type="text" placeholder="How should we call you?">
-        </div>
-        <button class="btn btn-primary w-full" onclick="joinProject()">Enter project →</button>
-      </div>
-      <div class="card">
-        <h2 class="serif text-xl mb-4">Start a new project</h2>
-        <div class="mb-3">
-          <label>Project name</label>
-          <input id="new-name" type="text" placeholder="e.g. Bali Trip 2025">
-        </div>
-        <div class="mb-4">
-          <label>Default currency</label>
-          <select id="new-currency">
-            <option>USD</option><option>EUR</option><option>GBP</option>
-            <option>SGD</option><option>HKD</option><option>JPY</option>
-            <option>AUD</option><option>CAD</option><option>CNY</option>
-            <option>THB</option><option>MYR</option><option>IDR</option>
-            <option>INR</option><option>KRW</option><option>PHP</option>
-          </select>
-        </div>
-        <div class="mb-4">
-          <label>Your name</label>
-          <input id="creator-name" type="text" placeholder="You'll be the first member">
-        </div>
-        <button class="btn btn-primary w-full" onclick="createProject()">Create project →</button>
-      </div>
+    </div>
+    <div class="card mb-4">
+      <h2 style="font-family:var(--serif);font-size:1.25rem;margin-bottom:16px">Join a project</h2>
+      <div class="mb-3"><label>Project ID</label>
+        <input id="join-id" type="text" placeholder="Paste project ID or link" oninput="parseProjectInput(this.value)"></div>
+      <div class="mb-4"><label>Your name</label>
+        <input id="join-name" type="text" placeholder="How should we call you?"></div>
+      <button class="btn btn-primary w-full" onclick="joinProject()">Enter project →</button>
+    </div>
+    <div class="card">
+      <h2 style="font-family:var(--serif);font-size:1.25rem;margin-bottom:16px">Start a new project</h2>
+      <div class="mb-3"><label>Project name</label>
+        <input id="new-name" type="text" placeholder="e.g. Bali Trip 2025"></div>
+      <div class="mb-4"><label>Default currency</label>
+        <select id="new-currency">
+          <option>USD</option><option>EUR</option><option>GBP</option><option>SGD</option>
+          <option>HKD</option><option>JPY</option><option>AUD</option><option>CAD</option>
+          <option>CNY</option><option>THB</option><option>MYR</option><option>IDR</option>
+          <option>INR</option><option>KRW</option><option>PHP</option>
+        </select></div>
+      <div class="mb-4"><label>Your name</label>
+        <input id="creator-name" type="text" placeholder="You'll be the first member"></div>
+      <button class="btn btn-primary w-full" onclick="createProject()">Create project →</button>
+    </div>
+  </div>
+</div>
+
+<!-- DIRECTORY -->
+<div id="view-directory" class="hidden min-h-screen px-4 py-12">
+  <div class="w-full max-w-lg mx-auto">
+    <div class="flex items-center gap-4 mb-8">
+      <button class="btn btn-ghost" onclick="hideDirectory()">← Back</button>
+      <h2 style="font-family:var(--serif);font-size:1.75rem">All Projects</h2>
+    </div>
+    <div id="directory-list" class="card">
+      <div class="text-sm text-gray-400 text-center py-8">Loading…</div>
+    </div>
+  </div>
+</div>
+
+<!-- PROJECT VIEW -->
+<div id="view-project" class="hidden min-h-screen">
+  <header style="background:rgba(245,240,232,.9);backdrop-filter:blur(8px);border-bottom:1.5px solid var(--rule);" class="sticky top-0 z-10 px-4 py-3 flex items-center justify-between">
+    <div>
+      <div id="hdr-name" style="font-family:var(--serif);font-size:1.25rem;line-height:1.2"></div>
+      <div id="hdr-meta" style="font-family:var(--mono);font-size:11px;color:#aaa;margin-top:2px"></div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button class="btn btn-secondary text-xs py-1.5 px-3" onclick="copyShareLink()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Share
+      </button>
+      <button class="btn btn-ghost text-xs" onclick="goHome()">← Home</button>
+    </div>
+  </header>
+
+  <div class="px-4 pt-2" style="max-width:720px;margin:0 auto;">
+    <div class="tabs">
+      <button class="tab active" data-tab="expenses" onclick="switchTab('expenses',this)">Expenses</button>
+      <button class="tab" data-tab="totals" onclick="switchTab('totals',this)">Total</button>
+      <button class="tab" data-tab="balances" onclick="switchTab('balances',this)">Balances</button>
+      <button class="tab" data-tab="settle" onclick="switchTab('settle',this)">Settle Up</button>
+      <button class="tab" data-tab="fx" onclick="switchTab('fx',this)">FX Rates</button>
     </div>
   </div>
 
-  <!-- DIRECTORY VIEW -->
-  <div id="view-directory" class="hidden min-h-screen px-4 py-12">
-    <div class="w-full max-w-lg mx-auto">
-      <div class="flex items-center gap-4 mb-8">
-        <button class="btn btn-ghost" onclick="hideDirectory()">← Back</button>
-        <h2 class="serif text-3xl">All Projects</h2>
-      </div>
-      <div id="directory-list" class="card">
-        <div class="text-sm text-gray-400 text-center py-8">Loading…</div>
-      </div>
+  <!-- Tab: Expenses -->
+  <div id="tab-expenses" class="px-4 pb-20" style="max-width:720px;margin:0 auto;">
+    <div class="flex items-center justify-between py-4">
+      <div style="font-family:var(--mono);font-size:11px;color:#aaa" id="exp-count"></div>
+      <button class="btn btn-primary" onclick="openAddExpense()">
+        <span style="font-size:16px;line-height:1">+</span> Add expense
+      </button>
+    </div>
+    <div id="expense-list" class="card">
+      <div class="text-sm text-gray-400 text-center py-8">No expenses yet.</div>
     </div>
   </div>
 
-  <!-- PROJECT VIEW -->
-  <div id="view-project" class="hidden min-h-screen">
-    <header style="background:rgba(245,240,232,.9);backdrop-filter:blur(8px);border-bottom:1.5px solid var(--rule);" class="sticky top-0 z-10 px-4 py-3 flex items-center justify-between">
+  <!-- Tab: Total -->
+  <div id="tab-totals" class="hidden px-4 pb-20" style="max-width:720px;margin:0 auto;">
+    <div class="py-4 flex items-center justify-between">
       <div>
-        <div id="hdr-name" class="serif text-xl" style="line-height:1.2"></div>
-        <div id="hdr-meta" class="mono text-xs text-gray-400 mt-0.5"></div>
+        <div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:#aaa">SPENDING OVERVIEW</div>
+        <div class="text-xs text-gray-400 mt-0.5">All amounts converted to <span id="totals-ccy-label" style="font-weight:600"></span></div>
       </div>
-      <div class="flex items-center gap-2">
-        <button class="btn btn-secondary text-xs py-1.5 px-3" onclick="copyShareLink()">
-          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-          Share
-        </button>
-        <button class="btn btn-ghost text-xs" onclick="goHome()">← Home</button>
-      </div>
-    </header>
+      <div id="totals-missing-fx-badge" class="hidden pill" style="background:var(--accent-lt);color:var(--accent)">⚠️ Missing FX</div>
+    </div>
 
-    <div class="px-4 pt-2" style="max-width:680px;margin:0 auto;">
-      <div class="tabs">
-        <button class="tab active" data-tab="expenses" onclick="switchTab('expenses',this)">Expenses</button>
-        <button class="tab" data-tab="balances" onclick="switchTab('balances',this)">Balances</button>
-        <button class="tab" data-tab="settle" onclick="switchTab('settle',this)">Settle Up</button>
-        <button class="tab" data-tab="fx" onclick="switchTab('fx',this)">FX Rates</button>
+    <!-- Big total number -->
+    <div class="stat-card mb-4">
+      <div style="font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:#aaa;margin-bottom:8px">PROJECT TOTAL</div>
+      <div id="totals-grand" style="font-family:var(--serif);font-size:2.5rem;color:var(--accent)">—</div>
+    </div>
+
+    <!-- View toggle: All / per member -->
+    <div class="flex gap-2 flex-wrap mb-4" id="member-chips">
+      <button class="member-chip active" data-member="all" onclick="selectTotalsMember('all',this)">All members</button>
+    </div>
+
+    <!-- Charts row -->
+    <div class="grid gap-4" style="grid-template-columns:1fr 1fr;" id="charts-grid">
+      <!-- Category pie -->
+      <div class="card" style="padding:20px">
+        <div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:#aaa;margin-bottom:16px">BY CATEGORY</div>
+        <canvas id="pie-category" width="200" height="200" style="display:block;margin:0 auto 16px"></canvas>
+        <div id="legend-category"></div>
+      </div>
+      <!-- Person bar (only shown for All) -->
+      <div class="card" style="padding:20px" id="card-person">
+        <div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:#aaa;margin-bottom:16px">BY PERSON (PAID)</div>
+        <canvas id="pie-person" width="200" height="200" style="display:block;margin:0 auto 16px"></canvas>
+        <div id="legend-person"></div>
       </div>
     </div>
 
-    <!-- Tab: Expenses -->
-    <div id="tab-expenses" class="px-4 pb-20" style="max-width:680px;margin:0 auto;">
-      <div class="flex items-center justify-between py-4">
-        <div class="mono text-xs text-gray-400" id="exp-count"></div>
-        <button class="btn btn-primary" onclick="openAddExpense()">
-          <span style="font-size:16px;line-height:1">+</span> Add expense
-        </button>
-      </div>
-      <div id="exp-summary"></div>
-      <div id="expense-list" class="card">
-        <div class="text-sm text-gray-400 text-center py-8">No expenses yet.</div>
-      </div>
-    </div>
-
-    <!-- Tab: Balances -->
-    <div id="tab-balances" class="hidden px-4 pb-20" style="max-width:680px;margin:0 auto;">
-      <div class="py-4">
-        <div class="mono text-xs text-gray-400 mb-1">NET BALANCES</div>
-        <div class="text-xs text-gray-400">Positive = owed money · Negative = owes money</div>
-      </div>
-      <div id="balance-list" class="card">
-        <div class="text-sm text-gray-400 text-center py-8">Add expenses to see balances.</div>
-      </div>
-    </div>
-
-    <!-- Tab: Settle Up -->
-    <div id="tab-settle" class="hidden px-4 pb-20" style="max-width:680px;margin:0 auto;">
-      <div class="py-4">
-        <div class="mono text-xs text-gray-400 mb-1">MINIMUM TRANSACTIONS</div>
-        <div class="text-xs text-gray-400">Greedy algorithm — fewest payments to settle all debts</div>
-      </div>
-      <div id="settle-missing-fx" class="hidden mb-3 card" style="border-color:var(--accent);background:var(--accent-lt)">
-        <div class="text-xs font-medium" style="color:var(--accent)">⚠️ Missing FX rates — go to FX Rates tab to set them</div>
-        <div id="settle-missing-list" class="mono text-xs mt-1" style="color:var(--accent)"></div>
-      </div>
-      <div id="settle-list" class="card">
-        <div class="text-sm text-gray-400 text-center py-8">Add expenses to calculate settlement.</div>
-      </div>
-    </div>
-
-    <!-- Tab: FX Rates -->
-    <div id="tab-fx" class="hidden px-4 pb-20" style="max-width:680px;margin:0 auto;">
-      <div class="py-4">
-        <div class="mono text-xs text-gray-400 mb-1">FX RATES</div>
-        <div class="text-xs text-gray-400">Set how much 1 unit of a foreign currency equals in <strong id="fx-base-label"></strong>. Applies to all settlement calculations.</div>
-      </div>
-      <div class="card mb-4">
-        <div class="grid gap-3">
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label>Currency</label>
-              <select id="fx-ccy-input" onchange="updateFxInputLabel()">
-                <option>USD</option><option>EUR</option><option>GBP</option>
-                <option>SGD</option><option>HKD</option><option>JPY</option>
-                <option>AUD</option><option>CAD</option><option>CNY</option>
-                <option>THB</option><option>MYR</option><option>IDR</option>
-                <option>INR</option><option>KRW</option><option>PHP</option>
-              </select>
-            </div>
-            <div>
-              <label id="fx-input-label">Rate (1 XXX = ?)</label>
-              <input id="fx-rate-input" type="number" min="0" step="0.0001" placeholder="e.g. 7.80">
-            </div>
-          </div>
-          <button class="btn btn-primary" onclick="saveFxRate()">Save rate</button>
-        </div>
-      </div>
-      <div id="fx-rates-list" class="card">
-        <div class="text-sm text-gray-400 text-center py-6">No FX rates set yet.</div>
-      </div>
+    <!-- Detail table -->
+    <div class="card mt-4" id="totals-detail">
+      <div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:#aaa;margin-bottom:12px">BREAKDOWN</div>
+      <div id="totals-rows"></div>
     </div>
   </div>
 
-  <!-- ADD EXPENSE MODAL -->
-  <div id="modal-expense" class="modal-bg hidden" onclick="closeIfBg(event,'modal-expense')">
-    <div class="modal">
-      <h2 class="serif text-2xl mb-5">New expense</h2>
-      <div class="grid gap-4">
-        <div>
-          <label>Item name</label>
-          <input id="exp-name" type="text" placeholder="Dinner, taxi, hotel…">
-        </div>
-        <div>
-          <label>Category</label>
-          <div class="flex gap-2">
-            <select id="exp-category" style="flex:1">
-              <option value="">— None —</option>
-            </select>
-            <button class="btn btn-secondary" style="white-space:nowrap;padding:8px 12px;font-size:12px" onclick="openAddCategory()">+ New</button>
-          </div>
-        </div>
+  <!-- Tab: Balances -->
+  <div id="tab-balances" class="hidden px-4 pb-20" style="max-width:720px;margin:0 auto;">
+    <div class="py-4">
+      <div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:#aaa;margin-bottom:4px">NET BALANCES</div>
+      <div class="text-xs text-gray-400">Positive = owed money · Negative = owes money</div>
+    </div>
+    <div id="balance-list" class="card">
+      <div class="text-sm text-gray-400 text-center py-8">Add expenses to see balances.</div>
+    </div>
+  </div>
+
+  <!-- Tab: Settle Up -->
+  <div id="tab-settle" class="hidden px-4 pb-20" style="max-width:720px;margin:0 auto;">
+    <div class="py-4">
+      <div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:#aaa;margin-bottom:4px">MINIMUM TRANSACTIONS</div>
+      <div class="text-xs text-gray-400">Greedy algorithm — fewest payments to settle all debts</div>
+    </div>
+    <div id="settle-missing-fx" class="hidden mb-3 card" style="border-color:var(--accent);background:var(--accent-lt)">
+      <div class="text-xs font-medium" style="color:var(--accent)">⚠️ Missing FX rates — go to FX Rates tab</div>
+      <div id="settle-missing-list" style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-top:4px"></div>
+    </div>
+    <div id="settle-list" class="card">
+      <div class="text-sm text-gray-400 text-center py-8">Add expenses to calculate settlement.</div>
+    </div>
+  </div>
+
+  <!-- Tab: FX Rates -->
+  <div id="tab-fx" class="hidden px-4 pb-20" style="max-width:720px;margin:0 auto;">
+    <div class="py-4">
+      <div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:#aaa;margin-bottom:4px">FX RATES</div>
+      <div class="text-xs text-gray-400">1 unit of foreign currency = ? <strong id="fx-base-label"></strong></div>
+    </div>
+    <div class="card mb-4">
+      <div class="grid gap-3">
         <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label>Amount</label>
-            <input id="exp-amount" type="number" min="0" step="0.01" placeholder="0.00">
-          </div>
-          <div>
-            <label>Currency</label>
-            <select id="exp-currency" onchange="onExpCurrencyChange(this.value)">
-              <option>USD</option><option>EUR</option><option>GBP</option>
-              <option>SGD</option><option>HKD</option><option>JPY</option>
-              <option>AUD</option><option>CAD</option><option>CNY</option>
-              <option>THB</option><option>MYR</option><option>IDR</option>
+          <div><label>Currency</label>
+            <select id="fx-ccy-input" onchange="updateFxInputLabel()">
+              <option>USD</option><option>EUR</option><option>GBP</option><option>SGD</option>
+              <option>HKD</option><option>JPY</option><option>AUD</option><option>CAD</option>
+              <option>CNY</option><option>THB</option><option>MYR</option><option>IDR</option>
               <option>INR</option><option>KRW</option><option>PHP</option>
-            </select>
-          </div>
+            </select></div>
+          <div><label id="fx-input-label">Rate</label>
+            <input id="fx-rate-input" type="number" min="0" step="0.0001" placeholder="e.g. 7.80"></div>
         </div>
-        <div id="fx-rate-row" class="hidden">
-          <label id="fx-rate-label">FX Rate (1 XXX = ? YYY)</label>
-          <div class="flex items-center gap-2">
-            <input id="exp-fx-rate" type="number" min="0" step="0.0001" placeholder="e.g. 7.80">
-            <span class="mono text-xs text-gray-400" style="white-space:nowrap" id="fx-rate-hint"></span>
-          </div>
-          <div class="mono text-xs mt-1" style="color:var(--accent)" id="fx-rate-saved"></div>
+        <button class="btn btn-primary" onclick="saveFxRate()">Save rate</button>
+      </div>
+    </div>
+    <div id="fx-rates-list" class="card">
+      <div class="text-sm text-gray-400 text-center py-6">No FX rates set yet.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD EXPENSE MODAL -->
+<div id="modal-expense" class="modal-bg hidden" onclick="closeIfBg(event,'modal-expense')">
+  <div class="modal">
+    <h2 style="font-family:var(--serif);font-size:1.5rem;margin-bottom:20px">New expense</h2>
+    <div class="grid gap-4">
+      <div><label>Item name</label>
+        <input id="exp-name" type="text" placeholder="Dinner, taxi, hotel…"></div>
+      <div><label>Category</label>
+        <div class="flex gap-2">
+          <select id="exp-category" style="flex:1"><option value="">— None —</option></select>
+          <button class="btn btn-secondary" style="white-space:nowrap;padding:8px 12px;font-size:12px" onclick="openAddCategory()">+ New</button>
+        </div></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label>Amount</label>
+          <input id="exp-amount" type="number" min="0" step="0.01" placeholder="0.00"></div>
+        <div><label>Currency</label>
+          <select id="exp-currency" onchange="onExpCurrencyChange(this.value)">
+            <option>USD</option><option>EUR</option><option>GBP</option><option>SGD</option>
+            <option>HKD</option><option>JPY</option><option>AUD</option><option>CAD</option>
+            <option>CNY</option><option>THB</option><option>MYR</option><option>IDR</option>
+            <option>INR</option><option>KRW</option><option>PHP</option>
+          </select></div>
+      </div>
+      <div id="fx-rate-row" class="hidden">
+        <label id="fx-rate-label">FX Rate</label>
+        <div class="flex items-center gap-2">
+          <input id="exp-fx-rate" type="number" min="0" step="0.0001" placeholder="e.g. 7.80">
+          <span style="font-family:var(--mono);font-size:11px;color:#aaa;white-space:nowrap" id="fx-rate-hint"></span>
         </div>
-        <div>
-          <label>Paid by</label>
-          <select id="exp-payer"></select>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-top:4px" id="fx-rate-saved"></div>
+      </div>
+      <div><label>Paid by</label><select id="exp-payer"></select></div>
+      <div>
+        <label>Split between</label>
+        <div id="exp-split" class="check-grid mt-1"></div>
+        <div class="flex gap-2 mt-2">
+          <button class="btn btn-ghost text-xs" onclick="selectAllSplit()">All</button>
+          <button class="btn btn-ghost text-xs" onclick="clearSplit()">None</button>
         </div>
-        <div>
-          <label>Split between</label>
-          <div id="exp-split" class="check-grid mt-1"></div>
-          <div class="flex gap-2 mt-2">
-            <button class="btn btn-ghost text-xs" onclick="selectAllSplit()">All</button>
-            <button class="btn btn-ghost text-xs" onclick="clearSplit()">None</button>
-          </div>
-        </div>
-        <div class="flex gap-3 pt-2">
-          <button class="btn btn-secondary flex-1" onclick="closeModal('modal-expense')">Cancel</button>
-          <button id="save-exp-btn" class="btn btn-primary flex-1" onclick="saveExpense()">Save expense</button>
-        </div>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button class="btn btn-secondary flex-1" onclick="closeModal('modal-expense')">Cancel</button>
+        <button id="save-exp-btn" class="btn btn-primary flex-1" onclick="saveExpense()">Save expense</button>
       </div>
     </div>
   </div>
+</div>
 
-  <!-- LOADING OVERLAY -->
-  <div id="loading" style="position:fixed;inset:0;background:rgba(245,240,232,.75);z-index:200;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
-    <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
-      <div style="width:32px;height:32px;border:3px solid var(--rule);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;"></div>
-      <div class="mono text-xs text-gray-400" id="loading-msg">Loading…</div>
-    </div>
+<!-- LOADING -->
+<div id="loading" style="position:fixed;inset:0;background:rgba(245,240,232,.75);z-index:200;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
+    <div style="width:32px;height:32px;border:3px solid var(--rule);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;"></div>
+    <div style="font-family:var(--mono);font-size:11px;color:#aaa" id="loading-msg">Loading…</div>
   </div>
+</div>
 </div>
 
 <div id="jsonp-container" style="display:none"></div>
@@ -308,68 +316,80 @@
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbz7r7R0tAxzgDT7liIwxew6-3FpHmcsv9CRmBoNtJN6qSs7_0Ae_GwP74O3s08tcOcCEw/exec";
 
+// Pie chart palette
+const PIE_COLORS = ["#c1440e","#2d6a4f","#4a7fbd","#b5860d","#7b4fa6","#c0704a","#3d8c6e","#6b8cba","#d4a520","#a06bc0","#e8856a","#56b08a"];
+
 let state = {
-  projectId:  null,
-  project:    null,
-  members:    [],
-  expenses:   [],
-  fxRates:    {},
-  categories: [],
-  me:         null,
-  currency:   "USD",
+  projectId:null, project:null, members:[], expenses:[],
+  fxRates:{}, categories:[], me:null, currency:"USD",
+  totalsFilter:"all",
 };
 
 // ── INIT ──────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
-  const params = new URLSearchParams(location.search);
-  const pid    = params.get("p");
-  if (pid) {
-    document.getElementById("join-id").value = pid;
-    document.getElementById("join-name").focus();
-  }
+  const p = new URLSearchParams(location.search).get("p");
+  if (p) { document.getElementById("join-id").value = p; document.getElementById("join-name").focus(); }
 });
 
 function parseProjectInput(val) {
-  try {
-    const url = new URL(val);
-    const p   = url.searchParams.get("p");
-    if (p) document.getElementById("join-id").value = p;
-  } catch {}
+  try { const u = new URL(val); const p = u.searchParams.get("p"); if (p) document.getElementById("join-id").value = p; } catch {}
 }
 
-// ── API (JSONP) ───────────────────────────────────────────
+// ── API ───────────────────────────────────────────────────
 function api(action, params = {}) {
   return new Promise((resolve, reject) => {
-    const allParams = { action, ...params };
-    if (Array.isArray(allParams.splitBetween))
-      allParams.splitBetween = allParams.splitBetween.join(",");
-
-    const cbName = "_cb_" + Date.now();
-    allParams.callback = cbName;
-
+    const all = { action, ...params };
+    if (Array.isArray(all.splitBetween)) all.splitBetween = all.splitBetween.join(",");
+    const cb = "_cb_" + Date.now();
+    all.callback = cb;
     const url = new URL(API_URL);
-    for (const [k, v] of Object.entries(allParams))
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-
-    window[cbName] = (data) => {
-      delete window[cbName];
+    for (const [k,v] of Object.entries(all)) if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
+    window[cb] = (data) => {
+      delete window[cb];
       document.getElementById("jsonp-container").innerHTML = "";
-      if (data.error) reject(new Error(data.error));
-      else resolve(data);
+      if (data.error) reject(new Error(data.error)); else resolve(data);
     };
-
     const s = document.createElement("script");
     s.src = url.toString();
-    s.onerror = () => { delete window[cbName]; reject(new Error("Failed to reach server.")); };
+    s.onerror = () => { delete window[cb]; reject(new Error("Failed to reach server.")); };
     document.getElementById("jsonp-container").appendChild(s);
   });
 }
 
-// ── PROJECT CREATE / JOIN ────────────────────────────────
+// ── FX HELPER ─────────────────────────────────────────────
+// Convert an expense amount to base currency. Returns null if rate missing.
+function toBase(amount, ccy) {
+  const base = state.currency;
+  if (ccy === base) return parseFloat(amount) || 0;
+  const rate = state.fxRates[ccy.toUpperCase()];
+  if (rate === undefined || rate === null) return null; // unknown
+  return (parseFloat(amount) || 0) * rate;
+}
+
+// Build totals object from expenses, filtered by payerId (or all)
+function buildTotals(filterMemberId) {
+  const byCategory = {};
+  const byPerson   = {};
+  let   grandTotal = 0;
+  let   hasMissing = false;
+
+  state.expenses.forEach(exp => {
+    if (filterMemberId && filterMemberId !== "all" && exp.payerId !== filterMemberId) return;
+    const converted = toBase(exp.amount, exp.currency || state.currency);
+    if (converted === null) { hasMissing = true; return; }
+    const amt = converted;
+    grandTotal += amt;
+    const cat = (exp.category && exp.category.toString().trim()) ? exp.category : "Uncategorised";
+    byCategory[cat] = (byCategory[cat] || 0) + amt;
+    byPerson[exp.payerName] = (byPerson[exp.payerName] || 0) + amt;
+  });
+
+  return { byCategory, byPerson, grandTotal, hasMissing };
+}
+
+// ── PROJECT CREATE / JOIN ─────────────────────────────────
 async function createProject() {
-  const name     = v("new-name").trim();
-  const currency = v("new-currency");
-  const myName   = v("creator-name").trim();
+  const name = v("new-name").trim(), currency = v("new-currency"), myName = v("creator-name").trim();
   if (!name)   return toast("Enter a project name");
   if (!myName) return toast("Enter your name");
   showLoading("Creating project…");
@@ -377,34 +397,27 @@ async function createProject() {
     const res = await api("createProject", { name, currency });
     const mem = await api("addMember", { projectId: res.projectId, name: myName });
     saveLocalMe(res.projectId, mem.memberId, myName);
-    await loadProject(res.projectId);
-    updateURL(res.projectId);
-  } catch(e) { toast(e.message); }
-  finally { hideLoading(); }
+    await loadProject(res.projectId); updateURL(res.projectId);
+  } catch(e) { toast(e.message); } finally { hideLoading(); }
 }
 
 async function joinProject() {
-  const projectId = v("join-id").trim();
-  const myName    = v("join-name").trim();
+  const projectId = v("join-id").trim(), myName = v("join-name").trim();
   if (!projectId) return toast("Enter a project ID");
   if (!myName)    return toast("Enter your name");
   showLoading("Joining project…");
   try {
     const mem = await api("addMember", { projectId, name: myName });
     saveLocalMe(projectId, mem.memberId, myName);
-    await loadProject(projectId);
-    updateURL(projectId);
-  } catch(e) { toast(e.message); }
-  finally { hideLoading(); }
+    await loadProject(projectId); updateURL(projectId);
+  } catch(e) { toast(e.message); } finally { hideLoading(); }
 }
 
-// ── LOAD PROJECT ─────────────────────────────────────────
 async function loadProject(projectId) {
   showLoading("Loading project…");
   try {
     const [projRes, expRes] = await Promise.all([
-      api("getProject", { projectId }),
-      api("getExpenses", { projectId }),
+      api("getProject", { projectId }), api("getExpenses", { projectId })
     ]);
     state.projectId  = projectId;
     state.project    = projRes.project;
@@ -413,16 +426,12 @@ async function loadProject(projectId) {
     state.fxRates    = projRes.fxRates || {};
     state.categories = projRes.categories || [];
     state.currency   = projRes.project.defaultCurrency || "USD";
-    const saved = loadLocalMe(projectId);
-    state.me = saved || null;
+    state.me = loadLocalMe(projectId) || null;
     renderProject();
-    show("view-project");
-    hide("view-landing");
-  } catch(e) { toast("Error: " + e.message); }
-  finally { hideLoading(); }
+    show("view-project"); hide("view-landing");
+  } catch(e) { toast("Error: " + e.message); } finally { hideLoading(); }
 }
 
-// ── RENDER ───────────────────────────────────────────────
 function renderProject() {
   document.getElementById("hdr-name").textContent = state.project.name;
   document.getElementById("hdr-meta").textContent =
@@ -430,67 +439,32 @@ function renderProject() {
   renderExpenses();
 }
 
+// ── EXPENSES TAB ──────────────────────────────────────────
 function renderExpenses() {
-  const { expenses, members, currency } = state;
+  const { expenses, members } = state;
   const list = document.getElementById("expense-list");
   const cnt  = document.getElementById("exp-count");
   cnt.textContent = `${expenses.length} expense${expenses.length !== 1 ? "s" : ""}`;
 
   if (!expenses.length) {
     list.innerHTML = `<div class="text-sm text-gray-400 text-center py-8">No expenses yet. Add the first one!</div>`;
-    document.getElementById("exp-summary").innerHTML = "";
     return;
   }
 
   const memberMap = {};
   members.forEach(m => memberMap[m.memberId] = m.name);
-
-  // Totals
-  const byPerson   = {};
-  const byCategory = {};
-  let grandTotal   = 0;
-  members.forEach(m => byPerson[m.name] = 0);
-  expenses.forEach(exp => {
-    const amt = parseFloat(exp.amount) || 0;
-    grandTotal += amt;
-    if (byPerson[exp.payerName] !== undefined) byPerson[exp.payerName] += amt;
-    const cat = (exp.category && exp.category.toString().trim()) ? exp.category : "Uncategorised";
-    byCategory[cat] = (byCategory[cat] || 0) + amt;
-  });
-
-  const personRows = Object.entries(byPerson)
-    .filter(([,val]) => val > 0).sort(([,a],[,b]) => b - a)
-    .map(([name, total]) => `
-      <div class="flex justify-between text-xs py-1" style="border-bottom:1px solid var(--rule)">
-        <span>${esc(name)}</span><span class="mono font-medium">${formatAmt(total)} ${currency}</span>
-      </div>`).join("");
-
-  const catRows = Object.entries(byCategory)
-    .sort(([,a],[,b]) => b - a)
-    .map(([cat, total]) => `
-      <div class="flex justify-between text-xs py-1" style="border-bottom:1px solid var(--rule)">
-        <span>${esc(cat)}</span><span class="mono font-medium">${formatAmt(total)} ${currency}</span>
-      </div>`).join("");
-
-  document.getElementById("exp-summary").innerHTML = `
-    <div class="card mb-4" style="padding:16px">
-      <div class="flex justify-between items-center mb-3">
-        <div class="mono text-xs tracking-widest text-gray-400">PROJECT TOTAL</div>
-        <div class="mono font-medium" style="color:var(--accent)">${formatAmt(grandTotal)} ${currency}</div>
-      </div>
-      <div class="grid grid-cols-2 gap-4">
-        <div><div class="mono text-xs text-gray-400 mb-1">BY PERSON</div>${personRows}</div>
-        <div><div class="mono text-xs text-gray-400 mb-1">BY CATEGORY</div>${catRows}</div>
-      </div>
-    </div>`;
-
   const sorted = [...expenses].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+
   list.innerHTML = sorted.map(exp => {
     const splitNames = exp.splitBetween.map(id => memberMap[id] || id).join(", ");
-    const date  = new Date(exp.createdAt).toLocaleDateString("en-GB", { day:"numeric", month:"short" });
+    const date = new Date(exp.createdAt).toLocaleDateString("en-GB", { day:"numeric", month:"short" });
     const isMine = state.me && exp.payerId === state.me.memberId;
     const catPill = (exp.category && exp.category.toString().trim())
       ? `<span class="pill pill-currency" style="margin-left:4px">${esc(exp.category)}</span>` : "";
+    // Show converted amount if foreign currency
+    const baseAmt = toBase(exp.amount, exp.currency || state.currency);
+    const convNote = (exp.currency && exp.currency !== state.currency && baseAmt !== null)
+      ? `<span style="font-family:var(--mono);font-size:10px;color:#aaa;display:block">≈ ${formatAmt(baseAmt)} ${state.currency}</span>` : "";
     return `
       <div class="expense-row">
         <div>
@@ -499,12 +473,13 @@ function renderExpenses() {
             Paid by <strong>${esc(exp.payerName)}</strong>${isMine ? ' <span style="color:var(--accent)">· you</span>' : ''}
             · Split: ${esc(splitNames)}
           </div>
-          <div class="mono text-xs text-gray-300 mt-0.5">${date}</div>
+          <div style="font-family:var(--mono);font-size:10px;color:#bbb;margin-top:2px">${date}</div>
         </div>
         <div class="flex items-start gap-2">
           <div class="text-right">
             <div class="font-medium">${formatAmt(exp.amount)}</div>
-            <span class="pill pill-currency">${exp.currency}</span>
+            <span class="pill pill-currency">${exp.currency || state.currency}</span>
+            ${convNote}
           </div>
           ${state.me ? `<button class="btn btn-ghost" style="padding:2px 6px;margin-top:2px;" onclick="deleteExpense('${exp.expenseId}')" title="Delete">
             <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
@@ -514,44 +489,132 @@ function renderExpenses() {
   }).join("");
 }
 
+// ── TOTAL TAB ─────────────────────────────────────────────
+function renderTotalsTab() {
+  const ccy = state.currency;
+  document.getElementById("totals-ccy-label").textContent = ccy;
+
+  // Build member chips
+  const chips = document.getElementById("member-chips");
+  chips.innerHTML = `<button class="member-chip ${state.totalsFilter === 'all' ? 'active' : ''}" data-member="all" onclick="selectTotalsMember('all',this)">All members</button>` +
+    state.members.map(m => `
+      <button class="member-chip ${state.totalsFilter === m.memberId ? 'active' : ''}" data-member="${m.memberId}" onclick="selectTotalsMember('${m.memberId}',this)">
+        ${esc(m.name)}
+      </button>`).join("");
+
+  renderTotalsCharts(state.totalsFilter);
+}
+
+function selectTotalsMember(memberId, btn) {
+  state.totalsFilter = memberId;
+  document.querySelectorAll(".member-chip").forEach(c => c.classList.remove("active"));
+  btn.classList.add("active");
+  // Hide person chart when viewing individual
+  document.getElementById("card-person").style.display = memberId === "all" ? "" : "none";
+  renderTotalsCharts(memberId);
+}
+
+function renderTotalsCharts(filterMemberId) {
+  const { byCategory, byPerson, grandTotal, hasMissing } = buildTotals(filterMemberId);
+  const ccy = state.currency;
+
+  // Missing FX badge
+  const badge = document.getElementById("totals-missing-fx-badge");
+  badge.classList.toggle("hidden", !hasMissing);
+
+  // Grand total
+  document.getElementById("totals-grand").textContent = `${formatAmt(grandTotal)} ${ccy}`;
+
+  // Draw pies
+  drawPie("pie-category", byCategory, "legend-category", ccy);
+  if (filterMemberId === "all") drawPie("pie-person", byPerson, "legend-person", ccy);
+
+  // Detail rows
+  const catEntries = Object.entries(byCategory).sort(([,a],[,b]) => b - a);
+  document.getElementById("totals-rows").innerHTML = catEntries.length ? catEntries.map(([cat, amt], i) => {
+    const pct = grandTotal > 0 ? (amt / grandTotal * 100).toFixed(1) : "0.0";
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--rule)">
+        <div class="legend-dot" style="background:${PIE_COLORS[i % PIE_COLORS.length]}"></div>
+        <div style="flex:1;font-size:13px">${esc(cat)}</div>
+        <div style="font-family:var(--mono);font-size:12px;color:#888">${pct}%</div>
+        <div style="font-family:var(--mono);font-size:13px;font-weight:500">${formatAmt(amt)} ${ccy}</div>
+      </div>`;
+  }).join("") : `<div class="text-sm text-gray-400 text-center py-4">No data.</div>`;
+}
+
+function drawPie(canvasId, dataObj, legendId, ccy) {
+  const canvas = document.getElementById(canvasId);
+  const ctx    = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height, cx = W/2, cy = H/2, r = Math.min(W,H)/2 - 8;
+
+  ctx.clearRect(0, 0, W, H);
+
+  const entries = Object.entries(dataObj).filter(([,v]) => v > 0).sort(([,a],[,b]) => b-a);
+  const total   = entries.reduce((s,[,v]) => s+v, 0);
+
+  if (!entries.length || total === 0) {
+    ctx.fillStyle = "#e8e4dc";
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+    return;
+  }
+
+  let angle = -Math.PI / 2;
+  entries.forEach(([, val], i) => {
+    const slice = (val / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, angle, angle + slice);
+    ctx.closePath();
+    ctx.fillStyle = PIE_COLORS[i % PIE_COLORS.length];
+    ctx.fill();
+    ctx.strokeStyle = "rgba(245,240,232,.6)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    angle += slice;
+  });
+
+  // Donut hole
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.52, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(245,240,232,.95)";
+  ctx.fill();
+
+  // Legend
+  document.getElementById(legendId).innerHTML = entries.map(([label, val], i) => `
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+      <div class="legend-dot" style="background:${PIE_COLORS[i % PIE_COLORS.length]}"></div>
+      <div style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(label)}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:#888">${formatAmt(val)}</div>
+    </div>`).join("");
+}
+
+// ── BALANCES & SETTLE ─────────────────────────────────────
 async function renderBalancesAndSettle() {
   showLoading("Calculating…");
   try {
     const res = await api("getSettlement", { projectId: state.projectId });
     renderBalances(res.balances, res.baseCcy, res.missingFx);
     renderSettle(res.transactions, res.baseCcy, res.missingFx);
-  } catch(e) { toast(e.message); }
-  finally { hideLoading(); }
+  } catch(e) { toast(e.message); } finally { hideLoading(); }
 }
 
 function renderBalances(balances, baseCcy, missingFx) {
   const list = document.getElementById("balance-list");
-  if (!balances || !balances.length) {
-    list.innerHTML = `<div class="text-sm text-gray-400 text-center py-8">No data yet.</div>`;
-    return;
-  }
-  if (missingFx && missingFx.length) toast("⚠️ Missing FX rates for: " + missingFx.join(", "));
-  const sorted = [...balances].sort((a,b) => b.net - a.net);
-  list.innerHTML = sorted.map(b => {
-    const cls  = b.net > 0 ? "pill-positive" : b.net < 0 ? "pill-negative" : "pill-currency";
-    const sign = b.net > 0 ? "+" : "";
-    return `
-      <div class="expense-row">
-        <div class="font-medium text-sm">${esc(b.name)}</div>
-        <span class="pill ${cls} text-sm">${sign}${formatAmt(b.net)} ${baseCcy || state.currency}</span>
-      </div>`;
+  if (!balances || !balances.length) { list.innerHTML = `<div class="text-sm text-gray-400 text-center py-8">No data yet.</div>`; return; }
+  if (missingFx && missingFx.length) toast("⚠️ Missing FX: " + missingFx.join(", "));
+  list.innerHTML = [...balances].sort((a,b) => b.net - a.net).map(b => {
+    const cls = b.net > 0 ? "pill-positive" : b.net < 0 ? "pill-negative" : "pill-currency";
+    return `<div class="expense-row"><div class="font-medium text-sm">${esc(b.name)}</div>
+      <span class="pill ${cls} text-sm">${b.net > 0 ? "+" : ""}${formatAmt(b.net)} ${baseCcy || state.currency}</span></div>`;
   }).join("");
 }
 
 function renderSettle(transactions, baseCcy, missingFx) {
-  const warn  = document.getElementById("settle-missing-fx");
-  const wlist = document.getElementById("settle-missing-list");
-  if (missingFx && missingFx.length) {
-    warn.classList.remove("hidden");
-    wlist.textContent = "No rate set for: " + missingFx.join(", ") + " — amounts used as-is";
-  } else {
-    warn.classList.add("hidden");
-  }
+  const warn = document.getElementById("settle-missing-fx");
+  document.getElementById("settle-missing-list").textContent =
+    missingFx && missingFx.length ? "No rate set for: " + missingFx.join(", ") : "";
+  warn.classList.toggle("hidden", !missingFx || !missingFx.length);
   const ccy  = baseCcy || state.currency;
   const list = document.getElementById("settle-list");
   if (!transactions || !transactions.length) {
@@ -563,38 +626,29 @@ function renderSettle(transactions, baseCcy, missingFx) {
       <div class="font-medium text-sm flex-1">${esc(t.from)}</div>
       <div class="settle-arrow">→</div>
       <div class="font-medium text-sm flex-1">${esc(t.to)}</div>
-      <div class="mono text-sm font-medium" style="color:var(--accent)">${formatAmt(t.amount)} ${ccy}</div>
+      <div style="font-family:var(--mono);font-size:13px;font-weight:500;color:var(--accent)">${formatAmt(t.amount)} ${ccy}</div>
     </div>`).join("");
 }
 
 // ── FX RATES ─────────────────────────────────────────────
 function onExpCurrencyChange(ccy) {
-  const row   = document.getElementById("fx-rate-row");
-  const label = document.getElementById("fx-rate-label");
-  const hint  = document.getElementById("fx-rate-hint");
-  const saved = document.getElementById("fx-rate-saved");
-  const base  = state.currency;
+  const row = document.getElementById("fx-rate-row"), base = state.currency;
   if (ccy === base) { row.classList.add("hidden"); return; }
   row.classList.remove("hidden");
-  label.textContent = `FX Rate (1 ${ccy} = ? ${base})`;
-  hint.textContent  = `→ ${base}`;
-  const existing = state.fxRates[ccy];
-  if (existing) {
-    document.getElementById("exp-fx-rate").value = existing;
-    saved.textContent = "Using saved rate: " + existing;
-  } else {
-    document.getElementById("exp-fx-rate").value = "";
-    saved.textContent = "No rate saved yet — enter one to save";
-  }
+  document.getElementById("fx-rate-label").textContent = `FX Rate (1 ${ccy} = ? ${base})`;
+  document.getElementById("fx-rate-hint").textContent  = `→ ${base}`;
+  const ex = state.fxRates[ccy];
+  document.getElementById("exp-fx-rate").value = ex || "";
+  document.getElementById("fx-rate-saved").textContent = ex ? "Using saved rate: " + ex : "No rate saved yet";
 }
 
 function updateFxInputLabel() {
-  const ccy  = document.getElementById("fx-ccy-input").value;
-  document.getElementById("fx-input-label").textContent = `Rate (1 ${ccy} = ? ${state.currency})`;
+  document.getElementById("fx-input-label").textContent =
+    `Rate (1 ${document.getElementById("fx-ccy-input").value} = ? ${state.currency})`;
 }
 
 async function saveFxRate() {
-  const ccy  = document.getElementById("fx-ccy-input").value;
+  const ccy = document.getElementById("fx-ccy-input").value;
   const rate = parseFloat(document.getElementById("fx-rate-input").value);
   if (!rate || rate <= 0) return toast("Enter a valid rate");
   if (ccy === state.currency) return toast("That's already the base currency");
@@ -604,34 +658,25 @@ async function saveFxRate() {
     state.fxRates[ccy] = rate;
     renderFxTab();
     toast(`Saved: 1 ${ccy} = ${rate} ${state.currency}`);
-  } catch(e) { toast(e.message); }
-  finally { hideLoading(); }
+  } catch(e) { toast(e.message); } finally { hideLoading(); }
 }
 
 async function maybeSaveFxFromExpense(ccy, rateStr) {
   const rate = parseFloat(rateStr);
   if (!rate || !ccy || ccy === state.currency) return;
-  try {
-    await api("setFxRate", { projectId: state.projectId, currency: ccy, rate });
-    state.fxRates[ccy] = rate;
-  } catch(e) {}
+  try { await api("setFxRate", { projectId: state.projectId, currency: ccy, rate }); state.fxRates[ccy] = rate; } catch(e) {}
 }
 
 function renderFxTab() {
   document.getElementById("fx-base-label").textContent = state.currency;
   updateFxInputLabel();
-  const list    = document.getElementById("fx-rates-list");
   const entries = Object.entries(state.fxRates);
-  if (!entries.length) {
-    list.innerHTML = `<div class="text-sm text-gray-400 text-center py-6">No FX rates set yet.</div>`;
-    return;
-  }
-  list.innerHTML = entries.map(([ccy, rate]) => `
+  document.getElementById("fx-rates-list").innerHTML = entries.length ? entries.map(([ccy, rate]) => `
     <div class="expense-row">
       <div><span class="font-medium text-sm">1 ${esc(ccy)}</span>
       <span class="text-sm text-gray-400"> = ${rate} ${esc(state.currency)}</span></div>
       <span class="pill pill-currency">${esc(ccy)}</span>
-    </div>`).join("");
+    </div>`).join("") : `<div class="text-sm text-gray-400 text-center py-6">No FX rates set yet.</div>`;
 }
 
 // ── CATEGORIES ───────────────────────────────────────────
@@ -641,92 +686,62 @@ async function openAddCategory() {
   try {
     const res = await api("addCategory", { projectId: state.projectId, name: name.trim() });
     if (!res.existing) state.categories.push({ categoryId: res.categoryId, name: res.name });
-    const catSel = document.getElementById("exp-category");
-    if (catSel) {
-      catSel.innerHTML = `<option value="">— None —</option>` +
-        state.categories.map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
-      catSel.value = res.name;
-    }
-    toast("Category added: " + res.name);
+    const sel = document.getElementById("exp-category");
+    sel.innerHTML = `<option value="">— None —</option>` +
+      state.categories.map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
+    sel.value = res.name;
+    toast("Category: " + res.name);
   } catch(e) { toast(e.message); }
 }
 
 // ── EXPENSE MODAL ────────────────────────────────────────
 function openAddExpense() {
-  if (!state.members.length) return toast("No members in project yet");
-
+  if (!state.members.length) return toast("No members yet");
   const payerSel = document.getElementById("exp-payer");
-  payerSel.innerHTML = state.members.map(m =>
-    `<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
+  payerSel.innerHTML = state.members.map(m => `<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
   if (state.me) payerSel.value = state.me.memberId;
-
   document.getElementById("exp-currency").value = state.currency;
   document.getElementById("fx-rate-row").classList.add("hidden");
-
-  const catSel = document.getElementById("exp-category");
-  catSel.innerHTML = `<option value="">— None —</option>` +
+  const sel = document.getElementById("exp-category");
+  sel.innerHTML = `<option value="">— None —</option>` +
     state.categories.map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
-
   const splitDiv = document.getElementById("exp-split");
   splitDiv.innerHTML = state.members.map(m => `
     <label class="check-item checked" data-id="${m.memberId}">
-      <input type="checkbox" checked value="${m.memberId}">
-      ${esc(m.name)}
+      <input type="checkbox" checked value="${m.memberId}">${esc(m.name)}
     </label>`).join("");
-
   splitDiv.querySelectorAll(".check-item").forEach(el => {
-    el.addEventListener("click", (e) => {
-      e.preventDefault();
-      el.classList.toggle("checked");
-      el.querySelector("input").checked = el.classList.contains("checked");
-    });
+    el.addEventListener("click", e => { e.preventDefault(); el.classList.toggle("checked"); el.querySelector("input").checked = el.classList.contains("checked"); });
   });
-
   showModal("modal-expense");
   document.getElementById("exp-name").focus();
 }
 
 async function saveExpense() {
-  const itemName     = v("exp-name").trim();
-  const amount       = parseFloat(v("exp-amount"));
-  const currency     = v("exp-currency");
-  const category     = v("exp-category");
-  const payerSel     = document.getElementById("exp-payer");
-  const payerId      = payerSel.value;
-  const payerName    = payerSel.options[payerSel.selectedIndex].text;
-  const splitBetween = [...document.querySelectorAll("#exp-split .check-item.checked")]
-    .map(el => el.dataset.id);
-
-  if (!itemName)               return toast("Enter an item name");
-  if (!amount || amount <= 0)  return toast("Enter a valid amount");
-  if (!splitBetween.length)    return toast("Select at least one person to split with");
-
+  const itemName = v("exp-name").trim(), amount = parseFloat(v("exp-amount")),
+        currency = v("exp-currency"), category = v("exp-category"),
+        payerSel = document.getElementById("exp-payer"),
+        payerId  = payerSel.value,
+        payerName = payerSel.options[payerSel.selectedIndex].text,
+        splitBetween = [...document.querySelectorAll("#exp-split .check-item.checked")].map(el => el.dataset.id);
+  if (!itemName)              return toast("Enter an item name");
+  if (!amount || amount <= 0) return toast("Enter a valid amount");
+  if (!splitBetween.length)   return toast("Select at least one person");
   const btn = document.getElementById("save-exp-btn");
-  btn.disabled = true;
-  btn.innerHTML = `<span class="spin"></span> Saving…`;
-
-  const fxRateVal = document.getElementById("exp-fx-rate").value;
-  if (currency !== state.currency && fxRateVal) {
-    await maybeSaveFxFromExpense(currency, fxRateVal);
-  }
-
+  btn.disabled = true; btn.innerHTML = `<span class="spin"></span> Saving…`;
+  const fxVal = document.getElementById("exp-fx-rate").value;
+  if (currency !== state.currency && fxVal) await maybeSaveFxFromExpense(currency, fxVal);
   try {
-    await api("addExpense", {
-      projectId: state.projectId, itemName, amount, currency,
-      payerId, payerName, splitBetween, category,
-    });
+    await api("addExpense", { projectId: state.projectId, itemName, amount, currency, payerId, payerName, splitBetween, category });
     const expRes = await api("getExpenses", { projectId: state.projectId });
     state.expenses = expRes.expenses;
     renderExpenses();
     closeModal("modal-expense");
     toast("Expense added ✓");
-    document.getElementById("exp-name").value   = "";
+    document.getElementById("exp-name").value = "";
     document.getElementById("exp-amount").value = "";
   } catch(e) { toast(e.message); }
-  finally {
-    btn.disabled = false;
-    btn.textContent = "Save expense";
-  }
+  finally { btn.disabled = false; btn.textContent = "Save expense"; }
 }
 
 async function deleteExpense(expenseId) {
@@ -738,158 +753,95 @@ async function deleteExpense(expenseId) {
     state.expenses = expRes.expenses;
     renderExpenses();
     toast("Deleted");
-  } catch(e) { toast(e.message); }
-  finally { hideLoading(); }
+  } catch(e) { toast(e.message); } finally { hideLoading(); }
 }
 
-// ── SPLIT HELPERS ────────────────────────────────────────
-function selectAllSplit() {
-  document.querySelectorAll("#exp-split .check-item").forEach(el => {
-    el.classList.add("checked");
-    el.querySelector("input").checked = true;
-  });
-}
-function clearSplit() {
-  document.querySelectorAll("#exp-split .check-item").forEach(el => {
-    el.classList.remove("checked");
-    el.querySelector("input").checked = false;
-  });
-}
+function selectAllSplit() { document.querySelectorAll("#exp-split .check-item").forEach(el => { el.classList.add("checked"); el.querySelector("input").checked = true; }); }
+function clearSplit()     { document.querySelectorAll("#exp-split .check-item").forEach(el => { el.classList.remove("checked"); el.querySelector("input").checked = false; }); }
 
 // ── TABS ─────────────────────────────────────────────────
 function switchTab(name, btn) {
-  ["expenses","balances","settle","fx"].forEach(t => {
+  ["expenses","totals","balances","settle","fx"].forEach(t => {
     document.getElementById("tab-"+t).classList.add("hidden");
     document.querySelector(`[data-tab="${t}"]`).classList.remove("active");
   });
   document.getElementById("tab-"+name).classList.remove("hidden");
   btn.classList.add("active");
+  if (name === "totals")   renderTotalsTab();
   if (name === "balances" || name === "settle") renderBalancesAndSettle();
-  if (name === "fx") renderFxTab();
+  if (name === "fx")       renderFxTab();
 }
 
 // ── DIRECTORY ────────────────────────────────────────────
 async function showDirectory() {
-  hide("view-landing");
-  show("view-directory");
-  showLoading("Loading projects…");
+  hide("view-landing"); show("view-directory"); showLoading("Loading projects…");
   try {
-    const res  = await api("getAllProjects");
+    const res = await api("getAllProjects");
     const list = document.getElementById("directory-list");
-    if (!res.projects || !res.projects.length) {
-      list.innerHTML = `<div class="text-sm text-gray-400 text-center py-8">No projects yet.</div>`;
-      return;
-    }
+    if (!res.projects || !res.projects.length) { list.innerHTML = `<div class="text-sm text-gray-400 text-center py-8">No projects yet.</div>`; return; }
     list.innerHTML = res.projects.map(p => `
       <div class="expense-row" style="display:block;padding:14px 0;">
-        <div class="flex items-center justify-between mb-2">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <div>
             <div class="font-medium text-sm">${esc(p.name)}</div>
-            <div class="mono text-xs text-gray-400">${esc(p.defaultCurrency)} · ${p.members.length} member${p.members.length !== 1 ? "s" : ""}</div>
+            <div style="font-family:var(--mono);font-size:11px;color:#aaa">${esc(p.defaultCurrency)} · ${p.members.length} member${p.members.length !== 1 ? "s" : ""}</div>
           </div>
         </div>
-        ${p.members.length ? `<div class="check-grid mb-2">
+        <div class="check-grid">
           ${p.members.map(m => `
             <label class="check-item" data-project="${esc(p.projectId)}" data-member="${esc(m.memberId)}" data-name="${esc(m.name)}" onclick="selectDirectoryMember(this)">
               ${esc(m.name)}
             </label>`).join("")}
-          <label class="check-item" style="font-style:italic;color:#888" onclick="newMemberJoin('${esc(p.projectId)}','${esc(p.name)}')">+ New member</label>
-        </div>` : `<button class="btn btn-secondary text-xs" onclick="newMemberJoin('${esc(p.projectId)}','${esc(p.name)}')">Join →</button>`}
+          <label class="check-item" style="font-style:italic;color:#aaa" onclick="newMemberJoin('${esc(p.projectId)}','${esc(p.name)}')">+ New member</label>
+        </div>
       </div>`).join("");
-  } catch(e) { toast(e.message); }
-  finally { hideLoading(); }
+  } catch(e) { toast(e.message); } finally { hideLoading(); }
 }
 
-function hideDirectory() {
-  hide("view-directory");
-  show("view-landing");
-}
+function hideDirectory() { hide("view-directory"); show("view-landing"); }
 
 async function selectDirectoryMember(el) {
-  const projectId = el.dataset.project;
-  const name      = el.dataset.name;
-  const memberId  = el.dataset.member;
-  hideDirectory();
-  showLoading("Loading project…");
-  try {
-    saveLocalMe(projectId, memberId, name);
-    await loadProject(projectId);
-    updateURL(projectId);
-  } catch(e) { toast(e.message); }
-  finally { hideLoading(); }
+  const projectId = el.dataset.project, name = el.dataset.name, memberId = el.dataset.member;
+  hideDirectory(); showLoading("Loading project…");
+  try { saveLocalMe(projectId, memberId, name); await loadProject(projectId); updateURL(projectId); }
+  catch(e) { toast(e.message); } finally { hideLoading(); }
 }
 
 function newMemberJoin(projectId, projectName) {
   hideDirectory();
-  document.getElementById("join-id").value   = projectId;
+  document.getElementById("join-id").value = projectId;
   document.getElementById("join-name").value = "";
   document.getElementById("join-name").focus();
   toast("Enter your name to join " + projectName);
 }
 
 // ── UTILS ────────────────────────────────────────────────
-function v(id)    { return document.getElementById(id).value; }
+function v(id) { return document.getElementById(id).value; }
 function show(id) { document.getElementById(id).classList.remove("hidden"); }
 function hide(id) { document.getElementById(id).classList.add("hidden"); }
 function showModal(id)  { document.getElementById(id).classList.remove("hidden"); }
 function closeModal(id) { document.getElementById(id).classList.add("hidden"); }
 function closeIfBg(e, id) { if (e.target.id === id) closeModal(id); }
-
-function showLoading(msg) {
-  document.getElementById("loading-msg").textContent = msg || "Loading…";
-  document.getElementById("loading").style.display = "flex";
-}
-function hideLoading() {
-  document.getElementById("loading").style.display = "none";
-}
-
-let toastTimer;
-function toast(msg) {
-  const el = document.getElementById("toast");
-  el.textContent = msg;
-  el.classList.add("show");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove("show"), 2800);
-}
-
-function formatAmt(n) {
-  return (parseFloat(n) || 0).toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 });
-}
-
-function esc(s) {
-  return String(s || "")
-    .replace(/&/g,"&amp;").replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-}
-
-function updateURL(projectId) {
-  const url = new URL(location.href);
-  url.searchParams.set("p", projectId);
-  history.replaceState({}, "", url.toString());
-}
-
+function showLoading(msg) { document.getElementById("loading-msg").textContent = msg||"Loading…"; document.getElementById("loading").style.display = "flex"; }
+function hideLoading() { document.getElementById("loading").style.display = "none"; }
+let _tt;
+function toast(msg) { const el = document.getElementById("toast"); el.textContent = msg; el.classList.add("show"); clearTimeout(_tt); _tt = setTimeout(() => el.classList.remove("show"), 2800); }
+function formatAmt(n) { return (parseFloat(n)||0).toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 }); }
+function esc(s) { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function updateURL(projectId) { const u = new URL(location.href); u.searchParams.set("p", projectId); history.replaceState({}, "", u.toString()); }
 function copyShareLink() {
-  const url = new URL(location.href);
-  url.searchParams.set("p", state.projectId);
-  navigator.clipboard.writeText(url.toString())
-    .then(() => toast("Share link copied!"))
-    .catch(() => toast("Copy the URL from your browser bar"));
+  const u = new URL(location.href); u.searchParams.set("p", state.projectId);
+  navigator.clipboard.writeText(u.toString()).then(() => toast("Link copied!")).catch(() => toast("Copy the URL manually"));
 }
-
 function goHome() {
-  hide("view-project");
-  show("view-landing");
-  history.replaceState({}, "", location.pathname);
-  state = { projectId:null, project:null, members:[], expenses:[], fxRates:{}, categories:[], me:null, currency:"USD" };
+  hide("view-project"); show("view-landing"); history.replaceState({}, "", location.pathname);
+  state = { projectId:null, project:null, members:[], expenses:[], fxRates:{}, categories:[], me:null, currency:"USD", totalsFilter:"all" };
 }
-
 function saveLocalMe(projectId, memberId, name) {
   try { localStorage.setItem("ss_me_"+projectId, JSON.stringify({ memberId, name })); } catch {}
   state.me = { memberId, name };
 }
-function loadLocalMe(projectId) {
-  try { return JSON.parse(localStorage.getItem("ss_me_"+projectId)); } catch { return null; }
-}
+function loadLocalMe(projectId) { try { return JSON.parse(localStorage.getItem("ss_me_"+projectId)); } catch { return null; } }
 </script>
 </body>
 </html>
