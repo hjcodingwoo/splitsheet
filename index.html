@@ -15,7 +15,7 @@
   body::before{content:'';position:fixed;inset:0;background-image:repeating-linear-gradient(transparent 0px,transparent 31px,var(--rule) 31px,var(--rule) 32px);opacity:.35;pointer-events:none;z-index:0;}
   #app{position:relative;z-index:1;}
   input,select{font-family:var(--sans);font-size:14px;background:#fff;border:1.5px solid var(--rule);border-radius:4px;padding:8px 12px;width:100%;color:var(--ink);transition:border-color .15s;outline:none;box-shadow:0 2px 6px rgba(0,0,0,.06);}
-  input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-lt),0 2px 6px rgba(0,0,0,.06);}
+  input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-lt);}
   input::placeholder{color:#bbb;}
   label{display:block;font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#888;margin-bottom:5px;}
   .btn{font-family:var(--sans);font-size:13px;font-weight:500;letter-spacing:.04em;padding:9px 20px;border-radius:4px;border:1.5px solid transparent;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
@@ -25,6 +25,8 @@
   .btn-secondary:hover{background:var(--cream);}
   .btn-ghost{background:transparent;color:#888;border:none;padding:6px 10px;font-size:12px;}
   .btn-ghost:hover{color:var(--accent);}
+  .btn-danger{background:transparent;color:var(--accent);border-color:var(--accent);}
+  .btn-danger:hover{background:var(--accent-lt);}
   .btn:disabled{opacity:.45;cursor:not-allowed;}
   .card{background:rgba(255,255,255,.75);backdrop-filter:blur(4px);border:1.5px solid var(--rule);border-radius:8px;padding:24px;}
   .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;font-family:var(--mono);}
@@ -53,7 +55,6 @@
   .member-chip{padding:8px 16px;border-radius:20px;border:1.5px solid var(--rule);cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;background:rgba(255,255,255,.6);}
   .member-chip.active{background:var(--ink);color:#fff;border-color:var(--ink);}
   .legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;display:inline-block;}
-  /* Guide */
   .guide-step{display:flex;gap:14px;align-items:flex-start;margin-bottom:18px;}
   .guide-num{width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;}
   .guide-step:last-child{margin-bottom:0;}
@@ -64,51 +65,24 @@
 <body>
 <div id="app">
 
-<!-- USER GUIDE MODAL -->
-<div id="modal-guide" class="modal-bg" style="z-index:200">
+<!-- GUIDE MODAL -->
+<div id="modal-guide" class="modal-bg" style="z-index:200;display:none">
   <div class="modal" style="max-width:400px">
     <div style="text-align:center;margin-bottom:20px">
       <div style="font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:#aaa;margin-bottom:6px">WELCOME TO</div>
       <div style="font-family:var(--serif);font-size:2rem;color:var(--ink)">Split<span style="color:var(--accent)">Chinchin</span></div>
       <div style="font-size:12px;color:#aaa;margin-top:4px">No accounts. No passwords. Just split.</div>
     </div>
-
     <div style="background:var(--cream);border-radius:8px;padding:18px;margin-bottom:20px">
-      <div class="guide-step">
-        <div class="guide-num">1</div>
-        <div>
-          <div style="font-weight:600;font-size:13px">Got a link?</div>
-          <div style="font-size:12px;color:#666;margin-top:2px">Paste it in "Join a project" — the project ID fills automatically.</div>
-        </div>
-      </div>
-      <div class="guide-step">
-        <div class="guide-num">2</div>
-        <div>
-          <div style="font-weight:600;font-size:13px">Enter your name</div>
-          <div style="font-size:12px;color:#666;margin-top:2px">This is how others see you. Use the same name every time you return.</div>
-        </div>
-      </div>
-      <div class="guide-step">
-        <div class="guide-num">3</div>
-        <div>
-          <div style="font-weight:600;font-size:13px">Log expenses</div>
-          <div style="font-size:12px;color:#666;margin-top:2px">Record who paid, how much, and who to split with.</div>
-        </div>
-      </div>
-      <div class="guide-step">
-        <div class="guide-num">4</div>
-        <div>
-          <div style="font-weight:600;font-size:13px">Settle Up</div>
-          <div style="font-size:12px;color:#666;margin-top:2px">The app calculates the fewest payments to settle all debts.</div>
-        </div>
-      </div>
+      <div class="guide-step"><div class="guide-num">1</div><div><div style="font-weight:600;font-size:13px">Got a link?</div><div style="font-size:12px;color:#666;margin-top:2px">Paste it in "Join a project" — the ID fills automatically.</div></div></div>
+      <div class="guide-step"><div class="guide-num">2</div><div><div style="font-weight:600;font-size:13px">Enter your name</div><div style="font-size:12px;color:#666;margin-top:2px">Use the same name every time you return.</div></div></div>
+      <div class="guide-step"><div class="guide-num">3</div><div><div style="font-weight:600;font-size:13px">Log expenses</div><div style="font-size:12px;color:#666;margin-top:2px">Record who paid, how much, and who to split with.</div></div></div>
+      <div class="guide-step"><div class="guide-num">4</div><div><div style="font-weight:600;font-size:13px">Settle Up</div><div style="font-size:12px;color:#666;margin-top:2px">The app calculates the fewest payments to clear all debts.</div></div></div>
     </div>
-
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
       <input type="checkbox" id="guide-no-show" style="width:auto;box-shadow:none;">
       <label for="guide-no-show" style="text-transform:none;letter-spacing:0;font-size:12px;color:#888;margin:0;cursor:pointer">Don't show again</label>
     </div>
-
     <button class="btn btn-primary w-full" onclick="closeGuide()" style="justify-content:center">Got it →</button>
   </div>
 </div>
@@ -122,7 +96,7 @@
       <p class="text-sm text-gray-500 mt-2">Shared expenses. Zero fuss.<br>No accounts. No drama.</p>
       <div class="mt-3 flex gap-2 justify-center">
         <button class="btn btn-secondary" onclick="showDirectory()">View all projects →</button>
-        <button class="btn btn-ghost" onclick="showGuide()" style="font-size:12px">? Guide</button>
+        <button class="btn btn-ghost" onclick="showGuide()">? Guide</button>
       </div>
     </div>
     <div class="card mb-4">
@@ -160,24 +134,31 @@
 
 <!-- PROJECT VIEW -->
 <div id="view-project" class="hidden min-h-screen">
-  <header style="background:rgba(245,240,232,.9);backdrop-filter:blur(8px);border-bottom:1.5px solid var(--rule);" class="sticky top-0 z-10 px-4 py-3 flex items-center justify-between">
-    <div>
-      <div id="hdr-name" style="font-family:var(--serif);font-size:1.25rem;line-height:1.2"></div>
-      <div id="hdr-meta" style="font-family:var(--mono);font-size:11px;color:#aaa;margin-top:2px"></div>
-    </div>
-    <div class="flex items-center gap-2">
-      <button class="btn btn-secondary text-xs py-1.5 px-3" onclick="copyShareLink()">
-        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Share
-      </button>
-      <button class="btn btn-ghost text-xs" onclick="goHome()">← Home</button>
+  <header style="background:rgba(245,240,232,.9);backdrop-filter:blur(8px);border-bottom:1.5px solid var(--rule);" class="sticky top-0 z-10 px-4 py-3">
+    <div class="flex items-center justify-between">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div id="hdr-name" style="font-family:var(--serif);font-size:1.25rem;line-height:1.2"></div>
+          <button onclick="promptRenameProject()" title="Rename" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:13px;padding:2px 4px">✏️</button>
+        </div>
+        <div id="hdr-members" style="font-family:var(--mono);font-size:11px;color:#aaa;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+      </div>
+      <div class="flex items-center gap-2" style="flex-shrink:0;margin-left:8px">
+        <button class="btn btn-secondary text-xs py-1.5 px-3" onclick="copyShareLink()">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Share
+        </button>
+        <button class="btn btn-ghost text-xs" onclick="goHome()">← Home</button>
+      </div>
     </div>
   </header>
+
   <div class="px-4 pt-2" style="max-width:720px;margin:0 auto;">
     <div class="tabs">
       <button class="tab active" data-tab="expenses" onclick="switchTab('expenses',this)">Expenses</button>
       <button class="tab" data-tab="totals" onclick="switchTab('totals',this)">Total</button>
       <button class="tab" data-tab="balances" onclick="switchTab('balances',this)">Balances</button>
       <button class="tab" data-tab="settle" onclick="switchTab('settle',this)">Settle Up</button>
+      <button class="tab" data-tab="members" onclick="switchTab('members',this)">Members</button>
       <button class="tab" data-tab="fx" onclick="switchTab('fx',this)">FX Rates</button>
     </div>
   </div>
@@ -244,10 +225,27 @@
       <div class="text-xs text-gray-400">Fewest payments to settle all debts</div>
     </div>
     <div id="settle-missing-fx" class="hidden mb-3 card" style="border-color:var(--accent);background:var(--accent-lt)">
-      <div class="text-xs font-medium" style="color:var(--accent)">⚠️ Missing FX rates — go to FX Rates tab</div>
+      <div class="text-xs font-medium" style="color:var(--accent)">⚠️ Missing FX rates — set them in FX Rates tab</div>
       <div id="settle-missing-list" style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-top:4px"></div>
     </div>
     <div id="settle-list" class="card"><div class="text-sm text-gray-400 text-center py-8">Add expenses to calculate.</div></div>
+  </div>
+
+  <!-- Tab: Members -->
+  <div id="tab-members" class="hidden px-4 pb-20" style="max-width:720px;margin:0 auto;">
+    <div class="py-4">
+      <div style="font-family:var(--mono);font-size:11px;color:#aaa;margin-bottom:4px">MEMBERS</div>
+    </div>
+    <div id="members-list" class="card mb-4"></div>
+    <div class="card">
+      <div style="font-family:var(--mono);font-size:11px;color:#aaa;margin-bottom:8px">MERGE MEMBERS</div>
+      <div style="font-size:12px;color:#888;margin-bottom:12px">Combines two names into one. All expenses reassigned to "Keep".</div>
+      <div class="grid grid-cols-2 gap-3 mb-3">
+        <div><label>Keep</label><select id="merge-keep"></select></div>
+        <div><label>Merge from</label><select id="merge-from"></select></div>
+      </div>
+      <button class="btn btn-danger w-full" onclick="doMerge()">Merge →</button>
+    </div>
   </div>
 
   <!-- Tab: FX Rates -->
@@ -276,10 +274,10 @@
   </div>
 </div>
 
-<!-- ADD EXPENSE MODAL -->
+<!-- ADD / EDIT EXPENSE MODAL -->
 <div id="modal-expense" class="modal-bg hidden" onclick="closeIfBg(event,'modal-expense')">
   <div class="modal">
-    <h2 style="font-family:var(--serif);font-size:1.5rem;margin-bottom:20px">New expense</h2>
+    <h2 id="exp-modal-title" style="font-family:var(--serif);font-size:1.5rem;margin-bottom:20px">New expense</h2>
     <div class="grid gap-4">
       <div><label>Item name</label><input id="exp-name" type="text" placeholder="Dinner, taxi, hotel…"></div>
       <div><label>Category</label>
@@ -316,7 +314,7 @@
       </div>
       <div class="flex gap-3 pt-2">
         <button class="btn btn-secondary flex-1" onclick="closeModal('modal-expense')">Cancel</button>
-        <button id="save-exp-btn" class="btn btn-primary flex-1" onclick="saveExpense()">Save expense</button>
+        <button id="save-exp-btn" class="btn btn-primary flex-1" onclick="saveExpense()">Save</button>
       </div>
     </div>
   </div>
@@ -339,38 +337,27 @@ const API_URL = "https://script.google.com/macros/s/AKfycbz7r7R0tAxzgDT7liIwxew6
 const PIE_COLORS = ["#c1440e","#2d6a4f","#4a7fbd","#b5860d","#7b4fa6","#c0704a","#3d8c6e","#6b8cba","#d4a520","#a06bc0","#e8856a","#56b08a"];
 
 let state = {
-  projectId:null,project:null,members:[],expenses:[],
-  fxRates:{},categories:[],me:null,currency:"USD",totalsFilter:"all",
+  projectId:null, project:null, members:[], expenses:[],
+  fxRates:{}, categories:[], me:null, currency:"USD", totalsFilter:"all",
 };
+let editingExpenseId = null;
 
 // ── GUIDE ─────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   const p = new URLSearchParams(location.search).get("p");
   if (p) { document.getElementById("join-id").value = p; document.getElementById("join-name").focus(); }
-  if (!localStorage.getItem("sc_guide_seen")) {
-    document.getElementById("modal-guide").style.display = "flex";
-  } else {
-    document.getElementById("modal-guide").style.display = "none";
-  }
+  if (!localStorage.getItem("sc_guide_seen")) showGuide();
 });
-
-function closeGuide() {
-  if (document.getElementById("guide-no-show").checked) {
-    localStorage.setItem("sc_guide_seen","1");
-  }
-  document.getElementById("modal-guide").style.display = "none";
-}
-
 function showGuide() {
   document.getElementById("guide-no-show").checked = false;
   document.getElementById("modal-guide").style.display = "flex";
 }
-
-// ── UTILS ─────────────────────────────────────────────────
-function parseProjectInput(val) {
-  try { const u = new URL(val); const p = u.searchParams.get("p"); if (p) document.getElementById("join-id").value = p; } catch {}
+function closeGuide() {
+  if (document.getElementById("guide-no-show").checked) localStorage.setItem("sc_guide_seen","1");
+  document.getElementById("modal-guide").style.display = "none";
 }
 
+// ── API ───────────────────────────────────────────────────
 function api(action, params = {}) {
   return new Promise((resolve, reject) => {
     const all = { action, ...params };
@@ -389,6 +376,10 @@ function api(action, params = {}) {
     s.onerror = () => { delete window[cb]; reject(new Error("Failed to reach server.")); };
     document.getElementById("jsonp-container").appendChild(s);
   });
+}
+
+function parseProjectInput(val) {
+  try { const u = new URL(val); const p = u.searchParams.get("p"); if (p) document.getElementById("join-id").value = p; } catch {}
 }
 
 function toBase(amount, ccy) {
@@ -438,8 +429,7 @@ async function createProject() {
     const res = await api("createProject", { name, currency });
     const mem = await api("addMember", { projectId: res.projectId, name: myName });
     saveLocalMe(res.projectId, mem.memberId, myName);
-    await loadProject(res.projectId);
-    updateURL(res.projectId);
+    await loadProject(res.projectId); updateURL(res.projectId);
   } catch(e) { toast(e.message); } finally { hideLoading(); }
 }
 
@@ -451,8 +441,7 @@ async function joinProject() {
   try {
     const mem = await api("addMember", { projectId, name: myName });
     saveLocalMe(projectId, mem.memberId, myName);
-    await loadProject(projectId);
-    updateURL(projectId);
+    await loadProject(projectId); updateURL(projectId);
   } catch(e) { toast(e.message); } finally { hideLoading(); }
 }
 
@@ -476,9 +465,21 @@ async function loadProject(projectId) {
 
 function renderProject() {
   document.getElementById("hdr-name").textContent = state.project.name;
-  document.getElementById("hdr-meta").textContent =
-    `${state.project.projectId} · ${state.members.length} member${state.members.length !== 1 ? "s" : ""}`;
+  const memberNames = state.members.map(m => m.name).join(" · ");
+  document.getElementById("hdr-members").textContent = memberNames || "No members";
   renderExpenses();
+}
+
+async function promptRenameProject() {
+  const newName = prompt("New project name:", state.project.name);
+  if (!newName || !newName.trim() || newName.trim() === state.project.name) return;
+  showLoading("Renaming…");
+  try {
+    await api("renameProject", { projectId: state.projectId, newName: newName.trim() });
+    state.project.name = newName.trim();
+    document.getElementById("hdr-name").textContent = newName.trim();
+    toast("Project renamed ✓");
+  } catch(e) { toast(e.message); } finally { hideLoading(); }
 }
 
 // ── EXPENSES ──────────────────────────────────────────────
@@ -506,18 +507,154 @@ function renderExpenses() {
           <div class="text-xs text-gray-400 mt-0.5">Paid by <strong>${esc(exp.payerName)}</strong>${isMine?' <span style="color:var(--accent)">· you</span>':''} · Split: ${esc(splitNames)}</div>
           <div style="font-family:var(--mono);font-size:10px;color:#bbb;margin-top:2px">${date}</div>
         </div>
-        <div class="flex items-start gap-2">
+        <div class="flex items-start gap-1">
           <div class="text-right">
             <div class="font-medium">${formatAmt(exp.amount)}</div>
             <span class="pill pill-currency">${exp.currency || state.currency}</span>
             ${convNote}
           </div>
-          ${state.me ? `<button class="btn btn-ghost" style="padding:2px 6px;margin-top:2px;" onclick="deleteExpense('${exp.expenseId}')" title="Delete">
-            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-          </button>` : ''}
+          <div style="display:flex;flex-direction:column;gap:2px;margin-top:2px">
+            <button class="btn btn-ghost" style="padding:2px 5px;font-size:11px" onclick="openEditExpense('${exp.expenseId}')" title="Edit">✏️</button>
+            <button class="btn btn-ghost" style="padding:2px 5px;" onclick="deleteExpense('${exp.expenseId}')" title="Delete">
+              <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+            </button>
+          </div>
         </div>
       </div>`;
   }).join("");
+}
+
+// ── EXPENSE MODAL (add + edit) ────────────────────────────
+function openAddExpense() {
+  if (!state.members.length) return toast("No members yet");
+  editingExpenseId = null;
+  document.getElementById("exp-modal-title").textContent = "New expense";
+  document.getElementById("save-exp-btn").textContent = "Save expense";
+  document.getElementById("exp-name").value = "";
+  document.getElementById("exp-amount").value = "";
+  document.getElementById("exp-currency").value = state.currency;
+  document.getElementById("fx-rate-row").classList.add("hidden");
+  populateExpenseModal();
+  showModal("modal-expense");
+  document.getElementById("exp-name").focus();
+}
+
+function openEditExpense(expenseId) {
+  const exp = state.expenses.find(e => e.expenseId === expenseId);
+  if (!exp) return toast("Expense not found");
+  editingExpenseId = expenseId;
+  document.getElementById("exp-modal-title").textContent = "Edit expense";
+  document.getElementById("save-exp-btn").textContent = "Update";
+  document.getElementById("exp-name").value   = exp.itemName || "";
+  document.getElementById("exp-amount").value = exp.amount || "";
+  document.getElementById("exp-currency").value = exp.currency || state.currency;
+  populateExpenseModal();
+  // Set payer
+  document.getElementById("exp-payer").value = exp.payerId;
+  // Set category
+  const catSel = document.getElementById("exp-category");
+  const catVal = (exp.category && exp.category.trim() && exp.category !== "0") ? exp.category.trim() : "";
+  catSel.value = catVal;
+  // Set split
+  const splitIds = Array.isArray(exp.splitBetween) ? exp.splitBetween.filter(s=>s) : String(exp.splitBetween).split(",").filter(s=>s);
+  document.querySelectorAll("#exp-split .check-item").forEach(el => {
+    const checked = splitIds.includes(el.dataset.id);
+    el.classList.toggle("checked", checked);
+    el.querySelector("input").checked = checked;
+  });
+  // FX row
+  onExpCurrencyChange(exp.currency || state.currency);
+  showModal("modal-expense");
+}
+
+function populateExpenseModal() {
+  const payerSel = document.getElementById("exp-payer");
+  payerSel.innerHTML = state.members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
+  if (state.me) payerSel.value = state.me.memberId;
+  const catSel = document.getElementById("exp-category");
+  catSel.innerHTML = `<option value="">— None —</option>` + state.categories.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
+  const splitDiv = document.getElementById("exp-split");
+  splitDiv.innerHTML = state.members.map(m=>`<label class="check-item checked" data-id="${m.memberId}"><input type="checkbox" checked value="${m.memberId}">${esc(m.name)}</label>`).join("");
+  splitDiv.querySelectorAll(".check-item").forEach(el=>{
+    el.addEventListener("click",e=>{e.preventDefault();el.classList.toggle("checked");el.querySelector("input").checked=el.classList.contains("checked");});
+  });
+}
+
+async function saveExpense() {
+  const itemName    = v("exp-name").trim(), amount = parseFloat(v("exp-amount")),
+        currency    = v("exp-currency"), category = v("exp-category"),
+        payerSel    = document.getElementById("exp-payer"),
+        payerId     = payerSel.value, payerName = payerSel.options[payerSel.selectedIndex].text,
+        splitBetween = [...document.querySelectorAll("#exp-split .check-item.checked")].map(el=>el.dataset.id);
+  if (!itemName)             return toast("Enter an item name");
+  if (!amount || amount <= 0) return toast("Enter a valid amount");
+  if (!splitBetween.length)  return toast("Select at least one person");
+  const btn = document.getElementById("save-exp-btn");
+  btn.disabled = true; btn.innerHTML = `<span class="spin"></span>`;
+  const fxVal = document.getElementById("exp-fx-rate").value;
+  if (currency !== state.currency && fxVal) await maybeSaveFxFromExpense(currency, fxVal);
+  try {
+    if (editingExpenseId) {
+      await api("editExpense", { expenseId:editingExpenseId, projectId:state.projectId, itemName, amount, currency, payerId, payerName, splitBetween, category });
+    } else {
+      await api("addExpense", { projectId:state.projectId, itemName, amount, currency, payerId, payerName, splitBetween, category });
+    }
+    const expRes = await api("getExpenses", { projectId:state.projectId });
+    state.expenses = expRes.expenses; renderExpenses();
+    closeModal("modal-expense");
+    toast(editingExpenseId ? "Updated ✓" : "Expense added ✓");
+    editingExpenseId = null;
+  } catch(e) { toast(e.message); }
+  finally { btn.disabled=false; btn.textContent = editingExpenseId ? "Update" : "Save expense"; }
+}
+
+async function deleteExpense(expenseId) {
+  if (!confirm("Delete this expense?")) return;
+  showLoading("Deleting…");
+  try {
+    await api("deleteExpense", { expenseId, projectId:state.projectId });
+    const expRes = await api("getExpenses", { projectId:state.projectId });
+    state.expenses = expRes.expenses; renderExpenses(); toast("Deleted");
+  } catch(e) { toast(e.message); } finally { hideLoading(); }
+}
+
+function selectAllSplit() { document.querySelectorAll("#exp-split .check-item").forEach(el=>{el.classList.add("checked");el.querySelector("input").checked=true;}); }
+function clearSplit()     { document.querySelectorAll("#exp-split .check-item").forEach(el=>{el.classList.remove("checked");el.querySelector("input").checked=false;}); }
+
+// ── MEMBERS TAB ───────────────────────────────────────────
+function renderMembersTab() {
+  const { members } = state;
+  const list = document.getElementById("members-list");
+  list.innerHTML = members.length ? members.map(m => `
+    <div class="expense-row">
+      <div class="font-medium text-sm">${esc(m.name)}</div>
+      <span style="font-family:var(--mono);font-size:10px;color:#bbb">${m.memberId}</span>
+    </div>`).join("") : `<div class="text-sm text-gray-400 text-center py-6">No members yet.</div>`;
+  const opts = members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
+  document.getElementById("merge-keep").innerHTML = opts;
+  document.getElementById("merge-from").innerHTML = opts;
+  // Set merge-from to second member by default if possible
+  if (members.length > 1) document.getElementById("merge-from").selectedIndex = 1;
+}
+
+async function doMerge() {
+  const keepMemberId  = document.getElementById("merge-keep").value;
+  const mergeMemberId = document.getElementById("merge-from").value;
+  if (keepMemberId === mergeMemberId) return toast("Select two different members");
+  const keepName  = state.members.find(m=>m.memberId===keepMemberId)?.name;
+  const mergeName = state.members.find(m=>m.memberId===mergeMemberId)?.name;
+  if (!confirm(`Merge "${mergeName}" into "${keepName}"?\n\nAll expenses from "${mergeName}" will be moved to "${keepName}". This cannot be undone.`)) return;
+  showLoading("Merging…");
+  try {
+    await api("mergeMembers", { projectId:state.projectId, keepMemberId, mergeMemberId });
+    const projRes = await api("getProject", { projectId:state.projectId });
+    const expRes  = await api("getExpenses", { projectId:state.projectId });
+    state.members  = projRes.members;
+    state.expenses = expRes.expenses;
+    renderProject();
+    renderMembersTab();
+    toast(`${mergeName} merged into ${keepName} ✓`);
+  } catch(e) { toast(e.message); } finally { hideLoading(); }
 }
 
 // ── TOTAL TAB ─────────────────────────────────────────────
@@ -526,14 +663,14 @@ function renderTotalsTab() {
   const chips = document.getElementById("member-chips");
   chips.innerHTML =
     `<button class="member-chip ${state.totalsFilter==='all'?'active':''}" onclick="selectTotalsMember('all',this)">All members</button>` +
-    state.members.map(m => `<button class="member-chip ${state.totalsFilter===m.memberId?'active':''}" onclick="selectTotalsMember('${m.memberId}',this)">${esc(m.name)}</button>`).join("");
+    state.members.map(m=>`<button class="member-chip ${state.totalsFilter===m.memberId?'active':''}" onclick="selectTotalsMember('${m.memberId}',this)">${esc(m.name)}</button>`).join("");
   document.getElementById("card-person").style.display = state.totalsFilter === "all" ? "" : "none";
   renderTotalsCharts(state.totalsFilter);
 }
 
 function selectTotalsMember(memberId, btn) {
   state.totalsFilter = memberId;
-  document.querySelectorAll(".member-chip").forEach(c => c.classList.remove("active"));
+  document.querySelectorAll(".member-chip").forEach(c=>c.classList.remove("active"));
   btn.classList.add("active");
   document.getElementById("card-person").style.display = memberId === "all" ? "" : "none";
   renderTotalsCharts(memberId);
@@ -547,27 +684,27 @@ function renderTotalsCharts(filterMemberId) {
   drawPie("pie-category", byCategory, "legend-category");
   if (filterMemberId === "all") drawPie("pie-person", byPerson, "legend-person");
   const catEntries = Object.entries(byCategory).sort(([,a],[,b]) => b - a);
-  if (!catEntries.length) { document.getElementById("totals-rows").innerHTML = `<div class="text-sm text-gray-400 text-center py-4">No data.</div>`; return; }
+  if (!catEntries.length) { document.getElementById("totals-rows").innerHTML=`<div class="text-sm text-gray-400 text-center py-4">No data.</div>`; return; }
   const expByCat = {};
   state.expenses.forEach(exp => {
     const cat   = cleanCat(exp.category);
-    const split = (Array.isArray(exp.splitBetween) ? exp.splitBetween : String(exp.splitBetween).split(",")).filter(s => s);
+    const split = (Array.isArray(exp.splitBetween)?exp.splitBetween:String(exp.splitBetween).split(",")).filter(s=>s);
     if (filterMemberId && filterMemberId !== "all" && !split.includes(filterMemberId)) return;
     if (!expByCat[cat]) expByCat[cat] = [];
     expByCat[cat].push(exp);
   });
-  document.getElementById("totals-rows").innerHTML = catEntries.map(([cat, amt], i) => {
-    const pct   = grandTotal > 0 ? (amt / grandTotal * 100).toFixed(1) : "0.0";
-    const color = PIE_COLORS[i % PIE_COLORS.length];
-    const items = (expByCat[cat] || []).sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
+  document.getElementById("totals-rows").innerHTML = catEntries.map(([cat,amt],i) => {
+    const pct   = grandTotal > 0 ? (amt/grandTotal*100).toFixed(1) : "0.0";
+    const color = PIE_COLORS[i%PIE_COLORS.length];
+    const items = (expByCat[cat]||[]).sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
     const itemRows = items.map(exp => {
-      const split = (Array.isArray(exp.splitBetween) ? exp.splitBetween : String(exp.splitBetween).split(",")).filter(s => s);
-      const base  = toBase(exp.amount, exp.currency || state.currency);
-      const share = (filterMemberId && filterMemberId !== "all" && base !== null) ? base / split.length : base;
-      const date  = new Date(exp.createdAt).toLocaleDateString("en-GB", { day:"numeric", month:"short" });
+      const split = (Array.isArray(exp.splitBetween)?exp.splitBetween:String(exp.splitBetween).split(",")).filter(s=>s);
+      const base  = toBase(exp.amount, exp.currency||state.currency);
+      const share = (filterMemberId && filterMemberId !== "all" && base !== null) ? base/split.length : base;
+      const date  = new Date(exp.createdAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0 7px 20px;border-bottom:1px dashed var(--rule);font-size:12px;">
         <div><span>${esc(exp.itemName)}</span><span style="color:#aaa;font-size:11px;margin-left:6px">${date} · ${esc(exp.payerName)}</span></div>
-        <span style="font-family:var(--mono);font-size:12px;color:#555;white-space:nowrap;margin-left:12px">${share !== null ? formatAmt(share) : "?"} ${ccy}</span>
+        <span style="font-family:var(--mono);font-size:12px;color:#555;white-space:nowrap;margin-left:12px">${share!==null?formatAmt(share):"?"} ${ccy}</span>
       </div>`;
     }).join("");
     return `<div style="border-bottom:1px solid var(--rule)">
@@ -584,33 +721,29 @@ function renderTotalsCharts(filterMemberId) {
 }
 
 function toggleCatRow(rowId, chevId) {
-  const el = document.getElementById(rowId), chv = document.getElementById(chevId);
-  const open = el.style.display === "none";
-  el.style.display = open ? "block" : "none";
-  chv.style.transform = open ? "rotate(180deg)" : "";
+  const el=document.getElementById(rowId), chv=document.getElementById(chevId);
+  const open=el.style.display==="none";
+  el.style.display=open?"block":"none"; chv.style.transform=open?"rotate(180deg)":"";
 }
 
 function drawPie(canvasId, dataObj, legendId) {
-  const canvas = document.getElementById(canvasId); if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const W = canvas.width, H = canvas.height, cx = W/2, cy = H/2, r = Math.min(W,H)/2 - 8;
+  const canvas=document.getElementById(canvasId); if (!canvas) return;
+  const ctx=canvas.getContext("2d");
+  const W=canvas.width,H=canvas.height,cx=W/2,cy=H/2,r=Math.min(W,H)/2-8;
   ctx.clearRect(0,0,W,H);
-  const entries = Object.entries(dataObj).filter(([,v]) => v > 0).sort(([,a],[,b]) => b-a);
-  const total   = entries.reduce((s,[,v]) => s+v, 0);
-  if (!entries.length || total === 0) {
-    ctx.fillStyle="#e8e4dc"; ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
-    document.getElementById(legendId).innerHTML=""; return;
-  }
-  let angle = -Math.PI/2;
-  entries.forEach(([,val],i) => {
-    const slice = (val/total)*Math.PI*2;
-    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,angle,angle+slice); ctx.closePath();
-    ctx.fillStyle=PIE_COLORS[i%PIE_COLORS.length]; ctx.fill();
-    ctx.strokeStyle="rgba(245,240,232,.6)"; ctx.lineWidth=2; ctx.stroke();
-    angle += slice;
+  const entries=Object.entries(dataObj).filter(([,v])=>v>0).sort(([,a],[,b])=>b-a);
+  const total=entries.reduce((s,[,v])=>s+v,0);
+  if (!entries.length||total===0){ctx.fillStyle="#e8e4dc";ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();document.getElementById(legendId).innerHTML="";return;}
+  let angle=-Math.PI/2;
+  entries.forEach(([,val],i)=>{
+    const slice=(val/total)*Math.PI*2;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,angle,angle+slice);ctx.closePath();
+    ctx.fillStyle=PIE_COLORS[i%PIE_COLORS.length];ctx.fill();
+    ctx.strokeStyle="rgba(245,240,232,.6)";ctx.lineWidth=2;ctx.stroke();
+    angle+=slice;
   });
-  ctx.beginPath(); ctx.arc(cx,cy,r*0.52,0,Math.PI*2); ctx.fillStyle="rgba(245,240,232,.95)"; ctx.fill();
-  document.getElementById(legendId).innerHTML = entries.map(([label,val],i) => `
+  ctx.beginPath();ctx.arc(cx,cy,r*0.52,0,Math.PI*2);ctx.fillStyle="rgba(245,240,232,.95)";ctx.fill();
+  document.getElementById(legendId).innerHTML=entries.map(([label,val],i)=>`
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
       <div class="legend-dot" style="background:${PIE_COLORS[i%PIE_COLORS.length]}"></div>
       <div style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(label)}</div>
@@ -622,29 +755,29 @@ function drawPie(canvasId, dataObj, legendId) {
 async function renderBalancesAndSettle() {
   showLoading("Calculating…");
   try {
-    const res = await api("getSettlement", { projectId: state.projectId });
-    renderBalances(res.balances, res.baseCcy, res.missingFx);
-    renderSettle(res.transactions, res.baseCcy, res.missingFx);
-  } catch(e) { toast(e.message); } finally { hideLoading(); }
+    const res = await api("getSettlement",{projectId:state.projectId});
+    renderBalances(res.balances,res.baseCcy,res.missingFx);
+    renderSettle(res.transactions,res.baseCcy,res.missingFx);
+  } catch(e){toast(e.message);} finally{hideLoading();}
 }
 
-function renderBalances(balances, baseCcy, missingFx) {
-  const list = document.getElementById("balance-list");
-  if (!balances || !balances.length) { list.innerHTML=`<div class="text-sm text-gray-400 text-center py-8">No data yet.</div>`; return; }
-  if (missingFx && missingFx.length) toast("⚠️ Missing FX: " + missingFx.join(", "));
-  list.innerHTML = [...balances].sort((a,b) => b.net-a.net).map(b => {
-    const cls = b.net>0?"pill-positive":b.net<0?"pill-negative":"pill-currency";
+function renderBalances(balances,baseCcy,missingFx) {
+  const list=document.getElementById("balance-list");
+  if (!balances||!balances.length){list.innerHTML=`<div class="text-sm text-gray-400 text-center py-8">No data yet.</div>`;return;}
+  if (missingFx&&missingFx.length) toast("⚠️ Missing FX: "+missingFx.join(", "));
+  list.innerHTML=[...balances].sort((a,b)=>b.net-a.net).map(b=>{
+    const cls=b.net>0?"pill-positive":b.net<0?"pill-negative":"pill-currency";
     return `<div class="expense-row"><div class="font-medium text-sm">${esc(b.name)}</div>
       <span class="pill ${cls} text-sm">${b.net>0?"+":""}${formatAmt(b.net)} ${baseCcy||state.currency}</span></div>`;
   }).join("");
 }
 
-function renderSettle(transactions, baseCcy, missingFx) {
-  document.getElementById("settle-missing-list").textContent = missingFx&&missingFx.length?"No rate set for: "+missingFx.join(", "):"";
-  document.getElementById("settle-missing-fx").classList.toggle("hidden", !missingFx||!missingFx.length);
-  const ccy = baseCcy||state.currency, list = document.getElementById("settle-list");
-  if (!transactions||!transactions.length) { list.innerHTML=`<div class="text-center py-8"><div style="font-size:2rem;margin-bottom:8px">🎉</div><div class="text-sm text-gray-400">Everyone's even!</div></div>`; return; }
-  list.innerHTML = transactions.map(t => `
+function renderSettle(transactions,baseCcy,missingFx) {
+  document.getElementById("settle-missing-list").textContent=missingFx&&missingFx.length?"No rate set for: "+missingFx.join(", "):"";
+  document.getElementById("settle-missing-fx").classList.toggle("hidden",!missingFx||!missingFx.length);
+  const ccy=baseCcy||state.currency,list=document.getElementById("settle-list");
+  if (!transactions||!transactions.length){list.innerHTML=`<div class="text-center py-8"><div style="font-size:2rem;margin-bottom:8px">🎉</div><div class="text-sm text-gray-400">Everyone's even!</div></div>`;return;}
+  list.innerHTML=transactions.map(t=>`
     <div class="settle-row">
       <div class="font-medium text-sm flex-1">${esc(t.from)}</div>
       <div class="settle-arrow">→</div>
@@ -655,119 +788,57 @@ function renderSettle(transactions, baseCcy, missingFx) {
 
 // ── FX ────────────────────────────────────────────────────
 function onExpCurrencyChange(ccy) {
-  const row = document.getElementById("fx-rate-row"), base = state.currency;
-  if (ccy === base) { row.classList.add("hidden"); return; }
+  const row=document.getElementById("fx-rate-row"),base=state.currency;
+  if (ccy===base){row.classList.add("hidden");return;}
   row.classList.remove("hidden");
-  document.getElementById("fx-rate-label").textContent = `FX Rate (1 ${ccy} = ? ${base})`;
-  document.getElementById("fx-rate-hint").textContent  = `→ ${base}`;
-  const ex = state.fxRates[ccy];
-  document.getElementById("exp-fx-rate").value = ex || "";
-  document.getElementById("fx-rate-saved").textContent = ex ? "Using saved rate: " + ex : "No rate saved yet";
+  document.getElementById("fx-rate-label").textContent=`FX Rate (1 ${ccy} = ? ${base})`;
+  document.getElementById("fx-rate-hint").textContent=`→ ${base}`;
+  const ex=state.fxRates[ccy];
+  document.getElementById("exp-fx-rate").value=ex||"";
+  document.getElementById("fx-rate-saved").textContent=ex?"Using saved rate: "+ex:"No rate saved yet";
 }
-
-function updateFxInputLabel() {
-  document.getElementById("fx-input-label").textContent = `Rate (1 ${document.getElementById("fx-ccy-input").value} = ? ${state.currency})`;
+function updateFxInputLabel(){
+  document.getElementById("fx-input-label").textContent=`Rate (1 ${document.getElementById("fx-ccy-input").value} = ? ${state.currency})`;
 }
-
-async function saveFxRate() {
-  const ccy = document.getElementById("fx-ccy-input").value, rate = parseFloat(document.getElementById("fx-rate-input").value);
+async function saveFxRate(){
+  const ccy=document.getElementById("fx-ccy-input").value,rate=parseFloat(document.getElementById("fx-rate-input").value);
   if (!rate||rate<=0) return toast("Enter a valid rate");
   if (ccy===state.currency) return toast("That's already the base currency");
   showLoading("Saving rate…");
-  try {
-    await api("setFxRate", { projectId:state.projectId, currency:ccy, rate });
-    state.fxRates[ccy] = rate; renderFxTab(); toast(`Saved: 1 ${ccy} = ${rate} ${state.currency}`);
-  } catch(e) { toast(e.message); } finally { hideLoading(); }
+  try{await api("setFxRate",{projectId:state.projectId,currency:ccy,rate});state.fxRates[ccy]=rate;renderFxTab();toast(`Saved: 1 ${ccy} = ${rate} ${state.currency}`);}
+  catch(e){toast(e.message);}finally{hideLoading();}
 }
-
-async function maybeSaveFxFromExpense(ccy, rateStr) {
-  const rate = parseFloat(rateStr);
+async function maybeSaveFxFromExpense(ccy,rateStr){
+  const rate=parseFloat(rateStr);
   if (!rate||!ccy||ccy===state.currency) return;
-  try { await api("setFxRate", { projectId:state.projectId, currency:ccy, rate }); state.fxRates[ccy]=rate; } catch(e) {}
+  try{await api("setFxRate",{projectId:state.projectId,currency:ccy,rate});state.fxRates[ccy]=rate;}catch(e){}
 }
-
-function renderFxTab() {
-  document.getElementById("fx-base-label").textContent = state.currency;
+function renderFxTab(){
+  document.getElementById("fx-base-label").textContent=state.currency;
   updateFxInputLabel();
-  const entries = Object.entries(state.fxRates);
-  document.getElementById("fx-rates-list").innerHTML = entries.length ? entries.map(([ccy,rate]) => `
+  const entries=Object.entries(state.fxRates);
+  document.getElementById("fx-rates-list").innerHTML=entries.length?entries.map(([ccy,rate])=>`
     <div class="expense-row">
       <div><span class="font-medium text-sm">1 ${esc(ccy)}</span><span class="text-sm text-gray-400"> = ${rate} ${esc(state.currency)}</span></div>
       <span class="pill pill-currency">${esc(ccy)}</span>
-    </div>`).join("") : `<div class="text-sm text-gray-400 text-center py-6">No FX rates set yet.</div>`;
+    </div>`).join(""):`<div class="text-sm text-gray-400 text-center py-6">No FX rates set yet.</div>`;
 }
 
 // ── CATEGORIES ───────────────────────────────────────────
-async function openAddCategory() {
-  const name = prompt("New category name:"); if (!name||!name.trim()) return;
-  try {
-    const res = await api("addCategory", { projectId:state.projectId, name:name.trim() });
-    if (!res.existing) state.categories.push({ categoryId:res.categoryId, name:res.name });
-    const sel = document.getElementById("exp-category");
-    sel.innerHTML = `<option value="">— None —</option>` + state.categories.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
-    sel.value = res.name; toast("Category: " + res.name);
-  } catch(e) { toast(e.message); }
+async function openAddCategory(){
+  const name=prompt("New category name:");if (!name||!name.trim()) return;
+  try{
+    const res=await api("addCategory",{projectId:state.projectId,name:name.trim()});
+    if (!res.existing) state.categories.push({categoryId:res.categoryId,name:res.name});
+    const sel=document.getElementById("exp-category");
+    sel.innerHTML=`<option value="">— None —</option>`+state.categories.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
+    sel.value=res.name;toast("Category: "+res.name);
+  }catch(e){toast(e.message);}
 }
-
-// ── EXPENSE MODAL ────────────────────────────────────────
-function openAddExpense() {
-  if (!state.members.length) return toast("No members yet");
-  const payerSel = document.getElementById("exp-payer");
-  payerSel.innerHTML = state.members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
-  if (state.me) payerSel.value = state.me.memberId;
-  document.getElementById("exp-currency").value = state.currency;
-  document.getElementById("fx-rate-row").classList.add("hidden");
-  const sel = document.getElementById("exp-category");
-  sel.innerHTML = `<option value="">— None —</option>` + state.categories.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
-  const splitDiv = document.getElementById("exp-split");
-  splitDiv.innerHTML = state.members.map(m=>`<label class="check-item checked" data-id="${m.memberId}"><input type="checkbox" checked value="${m.memberId}">${esc(m.name)}</label>`).join("");
-  splitDiv.querySelectorAll(".check-item").forEach(el=>{
-    el.addEventListener("click", e=>{ e.preventDefault(); el.classList.toggle("checked"); el.querySelector("input").checked=el.classList.contains("checked"); });
-  });
-  showModal("modal-expense");
-  document.getElementById("exp-name").focus();
-}
-
-async function saveExpense() {
-  const itemName=v("exp-name").trim(), amount=parseFloat(v("exp-amount")),
-        currency=v("exp-currency"), category=v("exp-category"),
-        payerSel=document.getElementById("exp-payer"),
-        payerId=payerSel.value, payerName=payerSel.options[payerSel.selectedIndex].text,
-        splitBetween=[...document.querySelectorAll("#exp-split .check-item.checked")].map(el=>el.dataset.id);
-  if (!itemName)             return toast("Enter an item name");
-  if (!amount||amount<=0)    return toast("Enter a valid amount");
-  if (!splitBetween.length)  return toast("Select at least one person");
-  const btn = document.getElementById("save-exp-btn");
-  btn.disabled=true; btn.innerHTML=`<span class="spin"></span> Saving…`;
-  const fxVal = document.getElementById("exp-fx-rate").value;
-  if (currency!==state.currency&&fxVal) await maybeSaveFxFromExpense(currency,fxVal);
-  try {
-    await api("addExpense", { projectId:state.projectId, itemName, amount, currency, payerId, payerName, splitBetween, category });
-    const expRes = await api("getExpenses", { projectId:state.projectId });
-    state.expenses = expRes.expenses; renderExpenses();
-    closeModal("modal-expense"); toast("Expense added ✓");
-    document.getElementById("exp-name").value="";
-    document.getElementById("exp-amount").value="";
-  } catch(e) { toast(e.message); }
-  finally { btn.disabled=false; btn.textContent="Save expense"; }
-}
-
-async function deleteExpense(expenseId) {
-  if (!confirm("Delete this expense?")) return;
-  showLoading("Deleting…");
-  try {
-    await api("deleteExpense", { expenseId, projectId:state.projectId });
-    const expRes = await api("getExpenses", { projectId:state.projectId });
-    state.expenses=expRes.expenses; renderExpenses(); toast("Deleted");
-  } catch(e) { toast(e.message); } finally { hideLoading(); }
-}
-
-function selectAllSplit() { document.querySelectorAll("#exp-split .check-item").forEach(el=>{el.classList.add("checked");el.querySelector("input").checked=true;}); }
-function clearSplit()     { document.querySelectorAll("#exp-split .check-item").forEach(el=>{el.classList.remove("checked");el.querySelector("input").checked=false;}); }
 
 // ── TABS ─────────────────────────────────────────────────
-function switchTab(name, btn) {
-  ["expenses","totals","balances","settle","fx"].forEach(t=>{
+function switchTab(name,btn){
+  ["expenses","totals","balances","settle","members","fx"].forEach(t=>{
     document.getElementById("tab-"+t).classList.add("hidden");
     document.querySelector(`[data-tab="${t}"]`).classList.remove("active");
   });
@@ -775,24 +846,25 @@ function switchTab(name, btn) {
   btn.classList.add("active");
   if (name==="totals")  renderTotalsTab();
   if (name==="balances"||name==="settle") renderBalancesAndSettle();
+  if (name==="members") renderMembersTab();
   if (name==="fx")      renderFxTab();
 }
 
 // ── DIRECTORY ────────────────────────────────────────────
-async function showDirectory() {
-  hide("view-landing"); show("view-directory"); showLoading("Loading projects…");
-  try {
-    const res = await api("getAllProjects");
-    const list = document.getElementById("directory-list");
-    if (!res.projects||!res.projects.length) { list.innerHTML=`<div class="text-sm text-gray-400 text-center py-8">No projects yet.</div>`; return; }
-    list.innerHTML = res.projects.map(p => `
-      <div style="border-bottom:1px solid var(--rule);padding:0;">
+async function showDirectory(){
+  hide("view-landing");show("view-directory");showLoading("Loading projects…");
+  try{
+    const res=await api("getAllProjects");
+    const list=document.getElementById("directory-list");
+    if (!res.projects||!res.projects.length){list.innerHTML=`<div class="text-sm text-gray-400 text-center py-8">No projects yet.</div>`;return;}
+    list.innerHTML=res.projects.map(p=>`
+      <div style="border-bottom:1px solid var(--rule);padding:0">
         <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;cursor:pointer;user-select:none" onclick="toggleDir('db-${p.projectId}','dc-${p.projectId}')">
           <div>
             <div class="font-medium text-sm">${esc(p.name)}</div>
             <div style="font-family:var(--mono);font-size:11px;color:#aaa">${esc(p.projectId)} · ${p.members.length} member${p.members.length!==1?"s":""} · ${esc(p.defaultCurrency)}</div>
           </div>
-          <span id="dc-${p.projectId}" style="color:#aaa;font-size:11px;transition:transform .2s;display:inline-block">▼</span>
+          <span id="dc-${p.projectId}" style="color:#aaa;font-size:11px;transition:transform .2s;display:inline-block;flex-shrink:0;margin-left:8px">▼</span>
         </div>
         <div id="db-${p.projectId}" style="display:none;padding-bottom:12px">
           <div class="check-grid">
@@ -801,26 +873,21 @@ async function showDirectory() {
           </div>
         </div>
       </div>`).join("");
-  } catch(e) { toast(e.message); } finally { hideLoading(); }
+  }catch(e){toast(e.message);}finally{hideLoading();}
 }
-
-function toggleDir(bodyId, chevId) {
-  const body=document.getElementById(bodyId), chv=document.getElementById(chevId);
+function toggleDir(bodyId,chevId){
+  const body=document.getElementById(bodyId),chv=document.getElementById(chevId);
   const open=body.style.display!=="none";
-  body.style.display=open?"none":"block";
-  chv.style.transform=open?"":"rotate(180deg)";
+  body.style.display=open?"none":"block";chv.style.transform=open?"":"rotate(180deg)";
 }
-
-function hideDirectory() { hide("view-directory"); show("view-landing"); }
-
-async function selectDirectoryMember(el) {
-  const projectId=el.dataset.project, name=el.dataset.name, memberId=el.dataset.member;
-  hideDirectory(); showLoading("Loading project…");
-  try { saveLocalMe(projectId,memberId,name); await loadProject(projectId); updateURL(projectId); }
-  catch(e) { toast(e.message); } finally { hideLoading(); }
+function hideDirectory(){hide("view-directory");show("view-landing");}
+async function selectDirectoryMember(el){
+  const projectId=el.dataset.project,name=el.dataset.name,memberId=el.dataset.member;
+  hideDirectory();showLoading("Loading project…");
+  try{saveLocalMe(projectId,memberId,name);await loadProject(projectId);updateURL(projectId);}
+  catch(e){toast(e.message);}finally{hideLoading();}
 }
-
-function newMemberJoin(projectId, projectName) {
+function newMemberJoin(projectId,projectName){
   hideDirectory();
   document.getElementById("join-id").value=projectId;
   document.getElementById("join-name").value="";
@@ -829,32 +896,33 @@ function newMemberJoin(projectId, projectName) {
 }
 
 // ── CORE UTILS ───────────────────────────────────────────
-function v(id) { return document.getElementById(id).value; }
-function show(id) { document.getElementById(id).classList.remove("hidden"); }
-function hide(id) { document.getElementById(id).classList.add("hidden"); }
-function showModal(id)  { document.getElementById(id).classList.remove("hidden"); }
-function closeModal(id) { document.getElementById(id).classList.add("hidden"); }
-function closeIfBg(e,id) { if (e.target.id===id) closeModal(id); }
-function showLoading(msg) { document.getElementById("loading-msg").textContent=msg||"Loading…"; document.getElementById("loading").style.display="flex"; }
-function hideLoading() { document.getElementById("loading").style.display="none"; }
+function v(id){return document.getElementById(id).value;}
+function show(id){document.getElementById(id).classList.remove("hidden");}
+function hide(id){document.getElementById(id).classList.add("hidden");}
+function showModal(id){document.getElementById(id).classList.remove("hidden");}
+function closeModal(id){document.getElementById(id).classList.add("hidden");}
+function closeIfBg(e,id){if(e.target.id===id)closeModal(id);}
+function showLoading(msg){document.getElementById("loading-msg").textContent=msg||"Loading…";document.getElementById("loading").style.display="flex";}
+function hideLoading(){document.getElementById("loading").style.display="none";}
 let _tt;
-function toast(msg) { const el=document.getElementById("toast"); el.textContent=msg; el.classList.add("show"); clearTimeout(_tt); _tt=setTimeout(()=>el.classList.remove("show"),2800); }
-function formatAmt(n) { return (parseFloat(n)||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function esc(s) { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
-function updateURL(projectId) { const u=new URL(location.href); u.searchParams.set("p",projectId); history.replaceState({},"",u.toString()); }
-function copyShareLink() {
-  const u=new URL(location.href); u.searchParams.set("p",state.projectId);
+function toast(msg){const el=document.getElementById("toast");el.textContent=msg;el.classList.add("show");clearTimeout(_tt);_tt=setTimeout(()=>el.classList.remove("show"),2800);}
+function formatAmt(n){return(parseFloat(n)||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});}
+function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function updateURL(projectId){const u=new URL(location.href);u.searchParams.set("p",projectId);history.replaceState({},"",u.toString());}
+function copyShareLink(){
+  const u=new URL(location.href);u.searchParams.set("p",state.projectId);
   navigator.clipboard.writeText(u.toString()).then(()=>toast("Link copied!")).catch(()=>toast("Copy URL manually"));
 }
-function goHome() {
-  hide("view-project"); show("view-landing"); history.replaceState({},"",location.pathname);
+function goHome(){
+  hide("view-project");show("view-landing");history.replaceState({},"",location.pathname);
   state={projectId:null,project:null,members:[],expenses:[],fxRates:{},categories:[],me:null,currency:"USD",totalsFilter:"all"};
+  editingExpenseId=null;
 }
-function saveLocalMe(projectId,memberId,name) {
-  try { localStorage.setItem("ss_me_"+projectId,JSON.stringify({memberId,name})); } catch {}
+function saveLocalMe(projectId,memberId,name){
+  try{localStorage.setItem("ss_me_"+projectId,JSON.stringify({memberId,name}));}catch{}
   state.me={memberId,name};
 }
-function loadLocalMe(projectId) { try { return JSON.parse(localStorage.getItem("ss_me_"+projectId)); } catch { return null; } }
+function loadLocalMe(projectId){try{return JSON.parse(localStorage.getItem("ss_me_"+projectId));}catch{return null;}}
 </script>
 </body>
 </html>
