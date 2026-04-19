@@ -938,6 +938,64 @@ function saveLocalMe(projectId,memberId,name){
   state.me={memberId,name};
 }
 function loadLocalMe(projectId){try{return JSON.parse(localStorage.getItem("ss_me_"+projectId));}catch{return null;}}
+// ── AUTOCOMPLETE ──────────────────────────────────────────
+let allProjectsCache = [];
+
+async function loadAllProjectsCache() {
+  try { const res = await api("getAllProjects"); allProjectsCache = res.projects || []; } catch(e) {}
+}
+
+function acProject(val) {
+  const dd = document.getElementById("ac-projects");
+  if (!val || val.length < 2) { dd.style.display="none"; return; }
+  const matches = allProjectsCache.filter(p =>
+    p.projectId.toLowerCase().includes(val.toLowerCase()) ||
+    p.name.toLowerCase().includes(val.toLowerCase())
+  ).slice(0,6);
+  if (!matches.length) { dd.style.display="none"; return; }
+  dd.innerHTML = matches.map(p => {
+    const hi = s => s.replace(new RegExp(`(${val.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, "gi"), "<strong style='color:var(--accent)'>$1</strong>");
+    return `<div style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--rule)" onmousedown="pickProject('${p.projectId}')" onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background=''">${hi(p.name)} <span style="color:#aaa;font-size:11px;font-family:var(--mono)">${hi(p.projectId)}</span></div>`;
+  }).join("");
+  dd.style.display = "block";
+}
+
+function pickProject(projectId) {
+  document.getElementById("join-id").value = projectId;
+  hideAc("ac-projects");
+  const proj = allProjectsCache.find(p => p.projectId === projectId);
+  if (proj && proj.members.length) showNameSuggestions(proj.members);
+}
+
+function showNameSuggestions(members) {
+  const dd = document.getElementById("ac-names");
+  dd.innerHTML = members.map(m =>
+    `<div style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--rule)" onmousedown="pickName('${m.name.replace(/'/g,"\\'")}') " onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background=''">${m.name}</div>`
+  ).join("");
+  dd.style.display = "block";
+  document.getElementById("join-name").focus();
+}
+
+function acName(val) {
+  const dd = document.getElementById("ac-names");
+  const projectId = document.getElementById("join-id").value.trim();
+  const proj = allProjectsCache.find(p => p.projectId.toLowerCase() === projectId.toLowerCase());
+  if (!proj) { dd.style.display="none"; return; }
+  const matches = proj.members.filter(m => m.name.toLowerCase().includes(val.toLowerCase())).slice(0,6);
+  if (!matches.length) { dd.style.display="none"; return; }
+  const hi = s => s.replace(new RegExp(`(${val.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, "gi"), "<strong style='color:var(--accent)'>$1</strong>");
+  dd.innerHTML = matches.map(m =>
+    `<div style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--rule)" onmousedown="pickName('${m.name.replace(/'/g,"\\'")}') " onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background=''">${hi(m.name)}</div>`
+  ).join("");
+  dd.style.display = "block";
+}
+
+function pickName(name) {
+  document.getElementById("join-name").value = name;
+  hideAc("ac-names");
+}
+
+function hideAc(id) { document.getElementById(id).style.display = "none"; }
 </script>
 </body>
 </html>
