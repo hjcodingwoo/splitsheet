@@ -76,7 +76,7 @@
     <div style="background:var(--cream);border-radius:8px;padding:18px;margin-bottom:20px">
       <div class="guide-step"><div class="guide-num">1</div><div><div style="font-weight:600;font-size:13px">Got a link?</div><div style="font-size:12px;color:#666;margin-top:2px">Paste it in "Join a project" — the ID fills automatically.</div></div></div>
       <div class="guide-step"><div class="guide-num">2</div><div><div style="font-weight:600;font-size:13px">Enter your name</div><div style="font-size:12px;color:#666;margin-top:2px">Use the same name every time you return.</div></div></div>
-      <div class="guide-step"><div class="guide-num">3</div><div><div style="font-weight:600;font-size:13px">Log expenses</div><div style="font-size:12px;color:#666;margin-top:2px">Record who paid, how much, and who to split with.</div></div></div>
+      <div class="guide-step"><div class="guide-num">3</div><div><div style="font-weight:600;font-size:13px">Log expenses</div><div style="font-size:12px;color:#666;margin-top:2px">Record who paid, how much, and who to split with. Scan receipts with 📷.</div></div></div>
       <div class="guide-step"><div class="guide-num">4</div><div><div style="font-weight:600;font-size:13px">Settle Up</div><div style="font-size:12px;color:#666;margin-top:2px">The app calculates the fewest payments to clear all debts.</div></div></div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
@@ -247,9 +247,7 @@
 
   <!-- Tab: Members -->
   <div id="tab-members" class="hidden px-4 pb-20" style="max-width:720px;margin:0 auto;">
-    <div class="py-4">
-      <div style="font-family:var(--mono);font-size:11px;color:#aaa;margin-bottom:4px">MEMBERS</div>
-    </div>
+    <div class="py-4"><div style="font-family:var(--mono);font-size:11px;color:#aaa;margin-bottom:4px">MEMBERS</div></div>
     <div id="members-list" class="card mb-4"></div>
     <div class="card">
       <div style="font-family:var(--mono);font-size:11px;color:#aaa;margin-bottom:8px">MERGE MEMBERS</div>
@@ -291,7 +289,17 @@
 <!-- ADD / EDIT EXPENSE MODAL -->
 <div id="modal-expense" class="modal-bg hidden" onclick="closeIfBg(event,'modal-expense')">
   <div class="modal">
-    <h2 id="exp-modal-title" style="font-family:var(--serif);font-size:1.5rem;margin-bottom:20px">New expense</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h2 id="exp-modal-title" style="font-family:var(--serif);font-size:1.5rem">New expense</h2>
+      <label style="text-transform:none;letter-spacing:0;font-size:12px;color:var(--accent);cursor:pointer;margin:0;display:flex;align-items:center;gap:4px;border:1.5px solid var(--accent);padding:5px 10px;border-radius:4px;white-space:nowrap" for="receipt-upload">
+        📷 Scan receipt
+      </label>
+      <input type="file" id="receipt-upload" accept="image/*" style="display:none" onchange="scanReceipt(this)">
+    </div>
+    <div id="receipt-scanning" style="display:none;text-align:center;padding:12px;background:var(--cream);border-radius:6px;font-size:13px;color:#888;margin-bottom:12px">
+      <div style="display:inline-block;width:14px;height:14px;border:2px solid #ccc;border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:middle"></div>
+      Reading receipt with AI…
+    </div>
     <div class="grid gap-4">
       <div><label>Item name</label><input id="exp-name" type="text" placeholder="Dinner, taxi, hotel…"></div>
       <div><label>Category</label>
@@ -300,7 +308,7 @@
           <button class="btn btn-secondary" style="white-space:nowrap;padding:8px 12px;font-size:12px" onclick="openAddCategory()">+ New</button>
         </div></div>
       <div class="grid grid-cols-2 gap-3">
-        <div><label>Amount</label><input id="exp-amount" type="number" min="0" step="0.01" placeholder="0.00"></div>
+        <div><label>Amount</label><input id="exp-amount" type="number" min="0" step="0.01" placeholder="0.00" oninput="if(splitMode==='custom')renderCustomSplit()"></div>
         <div><label>Currency</label>
           <select id="exp-currency" onchange="onExpCurrencyChange(this.value)">
             <option>USD</option><option>EUR</option><option>GBP</option><option>SGD</option>
@@ -319,8 +327,16 @@
       </div>
       <div><label>Paid by</label><select id="exp-payer"></select></div>
       <div>
-        <label>Split between</label>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+          <label style="margin:0">Split between</label>
+          <div style="display:flex;gap:4px">
+            <button onclick="setSplitMode('equal')" id="split-mode-equal" style="font-size:11px;padding:3px 10px;border-radius:4px;border:1.5px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer;font-family:var(--sans)">Equal</button>
+            <button onclick="setSplitMode('custom')" id="split-mode-custom" style="font-size:11px;padding:3px 10px;border-radius:4px;border:1.5px solid var(--rule);background:transparent;color:#888;cursor:pointer;font-family:var(--sans)">Custom</button>
+          </div>
+        </div>
         <div id="exp-split" class="check-grid mt-1"></div>
+        <div id="exp-split-custom" style="display:none;margin-top:10px;background:var(--cream);border-radius:6px;padding:12px"></div>
+        <div id="split-warning" style="font-size:11px;color:var(--accent);margin-top:4px;display:none"></div>
         <div class="flex gap-2 mt-2">
           <button class="btn btn-ghost text-xs" onclick="selectAllSplit()">All</button>
           <button class="btn btn-ghost text-xs" onclick="clearSplit()">None</button>
@@ -355,14 +371,18 @@ let state = {
   fxRates:{}, categories:[], me:null, currency:"USD", totalsFilter:"all",
 };
 let editingExpenseId = null;
+let splitMode = "equal";
+let allProjectsCache = [];
 
-// ── GUIDE ─────────────────────────────────────────────────
+// ── INIT ─────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   const p = new URLSearchParams(location.search).get("p");
   if (p) { document.getElementById("join-id").value = p; document.getElementById("join-name").focus(); }
   if (!localStorage.getItem("sc_guide_seen")) showGuide();
   loadAllProjectsCache();
 });
+
+// ── GUIDE ─────────────────────────────────────────────────
 function showGuide() {
   document.getElementById("guide-no-show").checked = false;
   document.getElementById("modal-guide").style.display = "flex";
@@ -397,6 +417,7 @@ function parseProjectInput(val) {
   try { const u = new URL(val); const p = u.searchParams.get("p"); if (p) document.getElementById("join-id").value = p; } catch {}
 }
 
+// ── FX HELPERS ────────────────────────────────────────────
 function toBase(amount, ccy) {
   const base = state.currency;
   ccy = (ccy || base).toUpperCase();
@@ -411,6 +432,7 @@ function cleanCat(raw) {
   return (s && s !== "0") ? s : "Uncategorised";
 }
 
+// ── TOTALS BUILDER ────────────────────────────────────────
 function buildTotals(filterMemberId) {
   const byCategory = {}, byPerson = {};
   let grandTotal = 0, hasMissing = false;
@@ -445,6 +467,7 @@ async function createProject() {
     const mem = await api("addMember", { projectId: res.projectId, name: myName });
     saveLocalMe(res.projectId, mem.memberId, myName);
     await loadProject(res.projectId); updateURL(res.projectId);
+    loadAllProjectsCache();
   } catch(e) { toast(e.message); } finally { hideLoading(); }
 }
 
@@ -480,8 +503,7 @@ async function loadProject(projectId) {
 
 function renderProject() {
   document.getElementById("hdr-name").textContent = state.project.name;
-  const memberNames = state.members.map(m => m.name).join(" · ");
-  document.getElementById("hdr-members").textContent = memberNames || "No members";
+  document.getElementById("hdr-members").textContent = state.members.map(m => m.name).join(" · ") || "No members";
   renderExpenses();
 }
 
@@ -515,12 +537,13 @@ function renderExpenses() {
     const baseAmt  = toBase(exp.amount, exp.currency || state.currency);
     const convNote = (exp.currency && exp.currency !== state.currency && baseAmt !== null)
       ? `<span style="font-family:var(--mono);font-size:10px;color:#aaa;display:block">≈ ${formatAmt(baseAmt)} ${state.currency}</span>` : "";
+    const hasCustom = exp.customSplits ? `<span style="font-family:var(--mono);font-size:10px;color:var(--green)">custom split</span>` : "";
     return `
       <div class="expense-row">
         <div>
           <div class="font-medium text-sm">${esc(exp.itemName)} ${catPill}</div>
           <div class="text-xs text-gray-400 mt-0.5">Paid by <strong>${esc(exp.payerName)}</strong>${isMine?' <span style="color:var(--accent)">· you</span>':''} · Split: ${esc(splitNames)}</div>
-          <div style="font-family:var(--mono);font-size:10px;color:#bbb;margin-top:2px">${date}</div>
+          <div style="font-family:var(--mono);font-size:10px;color:#bbb;margin-top:2px">${date} ${hasCustom}</div>
         </div>
         <div class="flex items-start gap-1">
           <div class="text-right">
@@ -539,7 +562,7 @@ function renderExpenses() {
   }).join("");
 }
 
-// ── EXPENSE MODAL (add + edit) ────────────────────────────
+// ── EXPENSE MODAL ─────────────────────────────────────────
 function openAddExpense() {
   if (!state.members.length) return toast("No members yet");
   editingExpenseId = null;
@@ -549,13 +572,15 @@ function openAddExpense() {
   document.getElementById("exp-amount").value = "";
   document.getElementById("exp-currency").value = state.currency;
   document.getElementById("fx-rate-row").classList.add("hidden");
+  splitMode = "equal";
   populateExpenseModal();
+  setSplitMode("equal");
   showModal("modal-expense");
   document.getElementById("exp-name").focus();
 }
 
 function openEditExpense(expenseId) {
-  const exp = state.expenses.find(e => e.expenseId === expenseId);
+  const exp = state.expenses.find(e => String(e.expenseId).trim() === String(expenseId).trim());
   if (!exp) return toast("Expense not found");
   editingExpenseId = expenseId;
   document.getElementById("exp-modal-title").textContent = "Edit expense";
@@ -563,22 +588,19 @@ function openEditExpense(expenseId) {
   document.getElementById("exp-name").value   = exp.itemName || "";
   document.getElementById("exp-amount").value = exp.amount || "";
   document.getElementById("exp-currency").value = exp.currency || state.currency;
+  splitMode = "equal";
   populateExpenseModal();
-  // Set payer
   document.getElementById("exp-payer").value = exp.payerId;
-  // Set category
-  const catSel = document.getElementById("exp-category");
   const catVal = (exp.category && exp.category.trim() && exp.category !== "0") ? exp.category.trim() : "";
-  catSel.value = catVal;
-  // Set split
+  document.getElementById("exp-category").value = catVal;
   const splitIds = Array.isArray(exp.splitBetween) ? exp.splitBetween.filter(s=>s) : String(exp.splitBetween).split(",").filter(s=>s);
   document.querySelectorAll("#exp-split .check-item").forEach(el => {
     const checked = splitIds.includes(el.dataset.id);
     el.classList.toggle("checked", checked);
     el.querySelector("input").checked = checked;
   });
-  // FX row
   onExpCurrencyChange(exp.currency || state.currency);
+  setSplitMode("equal");
   showModal("modal-expense");
 }
 
@@ -589,9 +611,14 @@ function populateExpenseModal() {
   const catSel = document.getElementById("exp-category");
   catSel.innerHTML = `<option value="">— None —</option>` + state.categories.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
   const splitDiv = document.getElementById("exp-split");
-  splitDiv.innerHTML = state.members.map(m=>`<label class="check-item checked" data-id="${m.memberId}"><input type="checkbox" checked value="${m.memberId}">${esc(m.name)}</label>`).join("");
+  splitDiv.innerHTML = state.members.map(m=>`<label class="check-item checked" data-id="${m.memberId}" data-name="${esc(m.name)}"><input type="checkbox" checked value="${m.memberId}">${esc(m.name)}</label>`).join("");
   splitDiv.querySelectorAll(".check-item").forEach(el=>{
-    el.addEventListener("click",e=>{e.preventDefault();el.classList.toggle("checked");el.querySelector("input").checked=el.classList.contains("checked");});
+    el.addEventListener("click", e=>{
+      e.preventDefault();
+      el.classList.toggle("checked");
+      el.querySelector("input").checked = el.classList.contains("checked");
+      if (splitMode === "custom") renderCustomSplit();
+    });
   });
 }
 
@@ -604,15 +631,24 @@ async function saveExpense() {
   if (!itemName)             return toast("Enter an item name");
   if (!amount || amount <= 0) return toast("Enter a valid amount");
   if (!splitBetween.length)  return toast("Select at least one person");
+
+  let customSplits = null;
+  if (splitMode === "custom") {
+    const cs = getCustomSplits();
+    const total = Object.values(cs).reduce((s,v)=>s+v, 0);
+    if (Math.abs(total - amount) > 0.02) return toast(`Split total (${formatAmt(total)}) doesn't match amount (${formatAmt(amount)})`);
+    customSplits = JSON.stringify(cs);
+  }
+
   const btn = document.getElementById("save-exp-btn");
   btn.disabled = true; btn.innerHTML = `<span class="spin"></span>`;
   const fxVal = document.getElementById("exp-fx-rate").value;
   if (currency !== state.currency && fxVal) await maybeSaveFxFromExpense(currency, fxVal);
   try {
     if (editingExpenseId) {
-      await api("editExpense", { expenseId:editingExpenseId, projectId:state.projectId, itemName, amount, currency, payerId, payerName, splitBetween, category });
+      await api("editExpense", { expenseId:editingExpenseId, projectId:state.projectId, itemName, amount, currency, payerId, payerName, splitBetween, category, customSplits });
     } else {
-      await api("addExpense", { projectId:state.projectId, itemName, amount, currency, payerId, payerName, splitBetween, category });
+      await api("addExpense", { projectId:state.projectId, itemName, amount, currency, payerId, payerName, splitBetween, category, customSplits });
     }
     const expRes = await api("getExpenses", { projectId:state.projectId });
     state.expenses = expRes.expenses; renderExpenses();
@@ -633,8 +669,133 @@ async function deleteExpense(expenseId) {
   } catch(e) { toast(e.message); } finally { hideLoading(); }
 }
 
-function selectAllSplit() { document.querySelectorAll("#exp-split .check-item").forEach(el=>{el.classList.add("checked");el.querySelector("input").checked=true;}); }
-function clearSplit()     { document.querySelectorAll("#exp-split .check-item").forEach(el=>{el.classList.remove("checked");el.querySelector("input").checked=false;}); }
+// ── SPLIT MODE ────────────────────────────────────────────
+function setSplitMode(mode) {
+  splitMode = mode;
+  const eq  = document.getElementById("split-mode-equal");
+  const cu  = document.getElementById("split-mode-custom");
+  eq.style.background = mode==="equal" ? "var(--ink)" : "transparent";
+  eq.style.color      = mode==="equal" ? "#fff" : "#888";
+  eq.style.borderColor= mode==="equal" ? "var(--ink)" : "var(--rule)";
+  cu.style.background = mode==="custom" ? "var(--ink)" : "transparent";
+  cu.style.color      = mode==="custom" ? "#fff" : "#888";
+  cu.style.borderColor= mode==="custom" ? "var(--ink)" : "var(--rule)";
+  document.getElementById("exp-split-custom").style.display = mode==="custom" ? "block" : "none";
+  if (mode==="custom") renderCustomSplit();
+}
+
+function renderCustomSplit() {
+  const checked = [...document.querySelectorAll("#exp-split .check-item.checked")].map(el=>({id:el.dataset.id, name:el.dataset.name}));
+  const amount  = parseFloat(document.getElementById("exp-amount").value) || 0;
+  const div     = document.getElementById("exp-split-custom");
+  if (!checked.length) { div.innerHTML=`<div style="font-size:12px;color:#aaa">Select members above first</div>`; return; }
+  const even = amount / checked.length;
+  div.innerHTML = `
+    <div style="font-size:11px;color:#888;margin-bottom:8px;font-family:var(--mono)">Leave blank to split remainder evenly</div>
+    ${checked.map(m=>`
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <div style="font-size:13px;flex:1;font-weight:500">${esc(m.name)}</div>
+        <input type="number" id="custom-split-${m.id}" data-id="${m.id}" min="0" step="0.01"
+          placeholder="${formatAmt(even)}"
+          style="width:110px;text-align:right;padding:6px 10px;font-family:var(--mono);font-size:13px;box-shadow:none"
+          oninput="updateCustomSplitTotal()">
+      </div>`).join("")}
+    <div style="border-top:1px solid var(--rule);padding-top:8px;margin-top:4px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;font-family:var(--mono);margin-bottom:2px">
+        <span style="color:#888">Assigned</span><span id="custom-split-assigned" style="font-weight:500">0.00</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;font-family:var(--mono)">
+        <span style="color:#888">Unassigned (split evenly)</span><span id="custom-split-remaining" style="color:var(--green);font-weight:500">0.00</span>
+      </div>
+    </div>`;
+  updateCustomSplitTotal();
+}
+
+function updateCustomSplitTotal() {
+  const amount   = parseFloat(document.getElementById("exp-amount").value) || 0;
+  const inputs   = [...document.querySelectorAll("[id^='custom-split-']:not([id='custom-split-assigned']):not([id='custom-split-remaining'])")];
+  const assigned = inputs.reduce((s,inp)=>s+(parseFloat(inp.value)||0), 0);
+  const remaining = amount - assigned;
+  const el1 = document.getElementById("custom-split-assigned");
+  const el2 = document.getElementById("custom-split-remaining");
+  if (el1) el1.textContent = formatAmt(assigned);
+  if (el2) { el2.textContent = formatAmt(Math.max(0, remaining)); el2.style.color = remaining < -0.01 ? "var(--accent)" : "var(--green)"; }
+  const warn = document.getElementById("split-warning");
+  if (assigned > amount + 0.01) { warn.textContent="⚠️ Assigned exceeds total"; warn.style.display="block"; }
+  else { warn.style.display="none"; }
+}
+
+function getCustomSplits() {
+  const amount  = parseFloat(document.getElementById("exp-amount").value) || 0;
+  const checked = [...document.querySelectorAll("#exp-split .check-item.checked")].map(el=>el.dataset.id);
+  const result  = {};
+  let assigned  = 0;
+  const unset   = [];
+  checked.forEach(id => {
+    const inp = document.getElementById("custom-split-"+id);
+    const val = inp ? parseFloat(inp.value) : NaN;
+    if (!isNaN(val) && val > 0) { result[id] = val; assigned += val; }
+    else unset.push(id);
+  });
+  const remainder = Math.max(0, amount - assigned);
+  if (unset.length > 0) { const share = remainder / unset.length; unset.forEach(id => { result[id] = share; }); }
+  return result;
+}
+
+function selectAllSplit() {
+  document.querySelectorAll("#exp-split .check-item").forEach(el=>{el.classList.add("checked");el.querySelector("input").checked=true;});
+  if (splitMode==="custom") renderCustomSplit();
+}
+function clearSplit() {
+  document.querySelectorAll("#exp-split .check-item").forEach(el=>{el.classList.remove("checked");el.querySelector("input").checked=false;});
+  if (splitMode==="custom") renderCustomSplit();
+}
+
+// ── RECEIPT SCAN ─────────────────────────────────────────
+async function scanReceipt(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = "";
+  document.getElementById("receipt-scanning").style.display = "block";
+  try {
+    const base64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result.split(",")[1]);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 300,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: file.type, data: base64 } },
+            { type: "text", text: 'Extract from this receipt. Return ONLY a JSON object, no explanation:\n{"itemName":"short description","amount":123.45,"currency":"HKD"}\nUse the currency shown. Amount = total.' }
+          ]
+        }]
+      })
+    });
+    const data = await response.json();
+    const text = (data.content?.[0]?.text || "").replace(/```json|```/g,"").trim();
+    const parsed = JSON.parse(text);
+    if (parsed.itemName) document.getElementById("exp-name").value = parsed.itemName;
+    if (parsed.amount)   document.getElementById("exp-amount").value = parsed.amount;
+    if (parsed.currency) {
+      const sel = document.getElementById("exp-currency");
+      sel.value = parsed.currency.toUpperCase();
+      onExpCurrencyChange(parsed.currency.toUpperCase());
+    }
+    toast("Receipt scanned ✓ — review the details");
+  } catch(e) {
+    toast("Could not read receipt — fill in manually");
+  } finally {
+    document.getElementById("receipt-scanning").style.display = "none";
+  }
+}
 
 // ── MEMBERS TAB ───────────────────────────────────────────
 function renderMembersTab() {
@@ -648,7 +809,6 @@ function renderMembersTab() {
   const opts = members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
   document.getElementById("merge-keep").innerHTML = opts;
   document.getElementById("merge-from").innerHTML = opts;
-  // Set merge-from to second member by default if possible
   if (members.length > 1) document.getElementById("merge-from").selectedIndex = 1;
 }
 
@@ -658,7 +818,7 @@ async function doMerge() {
   if (keepMemberId === mergeMemberId) return toast("Select two different members");
   const keepName  = state.members.find(m=>m.memberId===keepMemberId)?.name;
   const mergeName = state.members.find(m=>m.memberId===mergeMemberId)?.name;
-  if (!confirm(`Merge "${mergeName}" into "${keepName}"?\n\nAll expenses from "${mergeName}" will be moved to "${keepName}". This cannot be undone.`)) return;
+  if (!confirm(`Merge "${mergeName}" into "${keepName}"?\n\nAll expenses from "${mergeName}" will move to "${keepName}". Cannot be undone.`)) return;
   showLoading("Merging…");
   try {
     await api("mergeMembers", { projectId:state.projectId, keepMemberId, mergeMemberId });
@@ -666,8 +826,7 @@ async function doMerge() {
     const expRes  = await api("getExpenses", { projectId:state.projectId });
     state.members  = projRes.members;
     state.expenses = expRes.expenses;
-    renderProject();
-    renderMembersTab();
+    renderProject(); renderMembersTab();
     toast(`${mergeName} merged into ${keepName} ✓`);
   } catch(e) { toast(e.message); } finally { hideLoading(); }
 }
@@ -773,7 +932,7 @@ async function renderBalancesAndSettle() {
     const res = await api("getSettlement",{projectId:state.projectId});
     renderBalances(res.balances,res.baseCcy,res.missingFx);
     renderSettle(res.transactions,res.baseCcy,res.missingFx);
-  } catch(e){toast(e.message);} finally{hideLoading();}
+  } catch(e){toast(e.message);}finally{hideLoading();}
 }
 
 function renderBalances(balances,baseCcy,missingFx) {
@@ -867,6 +1026,8 @@ function switchTab(name,btn){
 
 // ── DIRECTORY ────────────────────────────────────────────
 async function showDirectory(){
+  const code = prompt("Enter access code:");
+  if (code !== "sfg") return toast("Incorrect code");
   hide("view-landing");show("view-directory");showLoading("Loading projects…");
   try{
     const res=await api("getAllProjects");
@@ -910,6 +1071,50 @@ function newMemberJoin(projectId,projectName){
   toast("Enter your name to join "+projectName);
 }
 
+// ── AUTOCOMPLETE ──────────────────────────────────────────
+async function loadAllProjectsCache(){
+  try{const res=await api("getAllProjects");allProjectsCache=res.projects||[];}catch(e){}
+}
+function acProject(val){
+  const dd=document.getElementById("ac-projects");
+  if (!val||val.length<2){dd.style.display="none";return;}
+  const matches=allProjectsCache.filter(p=>
+    p.projectId.toLowerCase().includes(val.toLowerCase())||
+    p.name.toLowerCase().includes(val.toLowerCase())
+  ).slice(0,6);
+  if (!matches.length){dd.style.display="none";return;}
+  dd.innerHTML=matches.map(p=>{
+    const hi=s=>s.replace(new RegExp(`(${val.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`,"gi"),"<strong style='color:var(--accent)'>$1</strong>");
+    return `<div style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--rule)" onmousedown="pickProject('${p.projectId}')" onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background=''">${hi(esc(p.name))} <span style="color:#aaa;font-size:11px;font-family:var(--mono)">${hi(p.projectId)}</span></div>`;
+  }).join("");
+  dd.style.display="block";
+}
+function pickProject(projectId){
+  document.getElementById("join-id").value=projectId;
+  hideAc("ac-projects");
+  const proj=allProjectsCache.find(p=>p.projectId===projectId);
+  if (proj&&proj.members.length) showNameSuggestions(proj.members);
+}
+function showNameSuggestions(members){
+  const dd=document.getElementById("ac-names");
+  dd.innerHTML=members.map(m=>`<div style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--rule)" onmousedown="pickName('${m.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')  " onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background=''">${esc(m.name)}</div>`).join("");
+  dd.style.display="block";
+  document.getElementById("join-name").focus();
+}
+function acName(val){
+  const dd=document.getElementById("ac-names");
+  const projectId=document.getElementById("join-id").value.trim();
+  const proj=allProjectsCache.find(p=>p.projectId.toLowerCase()===projectId.toLowerCase());
+  if (!proj){dd.style.display="none";return;}
+  const matches=proj.members.filter(m=>m.name.toLowerCase().includes(val.toLowerCase())).slice(0,6);
+  if (!matches.length){dd.style.display="none";return;}
+  const hi=s=>s.replace(new RegExp(`(${val.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`,"gi"),"<strong style='color:var(--accent)'>$1</strong>");
+  dd.innerHTML=matches.map(m=>`<div style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--rule)" onmousedown="pickName('${m.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')  " onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background=''">${hi(esc(m.name))}</div>`).join("");
+  dd.style.display="block";
+}
+function pickName(name){document.getElementById("join-name").value=name;hideAc("ac-names");}
+function hideAc(id){document.getElementById(id).style.display="none";}
+
 // ── CORE UTILS ───────────────────────────────────────────
 function v(id){return document.getElementById(id).value;}
 function show(id){document.getElementById(id).classList.remove("hidden");}
@@ -931,71 +1136,13 @@ function copyShareLink(){
 function goHome(){
   hide("view-project");show("view-landing");history.replaceState({},"",location.pathname);
   state={projectId:null,project:null,members:[],expenses:[],fxRates:{},categories:[],me:null,currency:"USD",totalsFilter:"all"};
-  editingExpenseId=null;
+  editingExpenseId=null; splitMode="equal";
 }
 function saveLocalMe(projectId,memberId,name){
   try{localStorage.setItem("ss_me_"+projectId,JSON.stringify({memberId,name}));}catch{}
   state.me={memberId,name};
 }
 function loadLocalMe(projectId){try{return JSON.parse(localStorage.getItem("ss_me_"+projectId));}catch{return null;}}
-// ── AUTOCOMPLETE ──────────────────────────────────────────
-let allProjectsCache = [];
-
-async function loadAllProjectsCache() {
-  try { const res = await api("getAllProjects"); allProjectsCache = res.projects || []; } catch(e) {}
-}
-
-function acProject(val) {
-  const dd = document.getElementById("ac-projects");
-  if (!val || val.length < 2) { dd.style.display="none"; return; }
-  const matches = allProjectsCache.filter(p =>
-    p.projectId.toLowerCase().includes(val.toLowerCase()) ||
-    p.name.toLowerCase().includes(val.toLowerCase())
-  ).slice(0,6);
-  if (!matches.length) { dd.style.display="none"; return; }
-  dd.innerHTML = matches.map(p => {
-    const hi = s => s.replace(new RegExp(`(${val.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, "gi"), "<strong style='color:var(--accent)'>$1</strong>");
-    return `<div style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--rule)" onmousedown="pickProject('${p.projectId}')" onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background=''">${hi(p.name)} <span style="color:#aaa;font-size:11px;font-family:var(--mono)">${hi(p.projectId)}</span></div>`;
-  }).join("");
-  dd.style.display = "block";
-}
-
-function pickProject(projectId) {
-  document.getElementById("join-id").value = projectId;
-  hideAc("ac-projects");
-  const proj = allProjectsCache.find(p => p.projectId === projectId);
-  if (proj && proj.members.length) showNameSuggestions(proj.members);
-}
-
-function showNameSuggestions(members) {
-  const dd = document.getElementById("ac-names");
-  dd.innerHTML = members.map(m =>
-    `<div style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--rule)" onmousedown="pickName('${m.name.replace(/'/g,"\\'")}') " onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background=''">${m.name}</div>`
-  ).join("");
-  dd.style.display = "block";
-  document.getElementById("join-name").focus();
-}
-
-function acName(val) {
-  const dd = document.getElementById("ac-names");
-  const projectId = document.getElementById("join-id").value.trim();
-  const proj = allProjectsCache.find(p => p.projectId.toLowerCase() === projectId.toLowerCase());
-  if (!proj) { dd.style.display="none"; return; }
-  const matches = proj.members.filter(m => m.name.toLowerCase().includes(val.toLowerCase())).slice(0,6);
-  if (!matches.length) { dd.style.display="none"; return; }
-  const hi = s => s.replace(new RegExp(`(${val.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, "gi"), "<strong style='color:var(--accent)'>$1</strong>");
-  dd.innerHTML = matches.map(m =>
-    `<div style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--rule)" onmousedown="pickName('${m.name.replace(/'/g,"\\'")}') " onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background=''">${hi(m.name)}</div>`
-  ).join("");
-  dd.style.display = "block";
-}
-
-function pickName(name) {
-  document.getElementById("join-name").value = name;
-  hideAc("ac-names");
-}
-
-function hideAc(id) { document.getElementById(id).style.display = "none"; }
 </script>
 </body>
 </html>
