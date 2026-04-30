@@ -301,7 +301,8 @@
       Reading receipt with AI…
     </div>
     <div class="grid gap-4">
-      <div><label>Item name</label><input id="exp-name" type="text" placeholder="Dinner, taxi, hotel…"></div>
+      <div><label>Item name</label><input id="exp-name" type="text" placeholder="Vendor, sub-category, date…"></div>
+      <div><label>Notes <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#bbb">(optional)</span></label><input id="exp-notes" type="text" placeholder="e.g. 2x steak, 1x wine, 8 pax"></div>
       <div><label>Category</label>
         <div class="flex gap-2">
           <select id="exp-category" style="flex:1"><option value="">— None —</option></select>
@@ -544,6 +545,7 @@ function renderExpenses() {
           <div class="font-medium text-sm">${esc(exp.itemName)} ${catPill}</div>
           <div class="text-xs text-gray-400 mt-0.5">Paid by <strong>${esc(exp.payerName)}</strong>${isMine?' <span style="color:var(--accent)">· you</span>':''} · Split: ${esc(splitNames)}</div>
           <div style="font-family:var(--mono);font-size:10px;color:#bbb;margin-top:2px">${date} ${hasCustom}</div>
+          ${exp.notes ? `<div class="text-xs mt-0.5" style="color:#aaa;font-style:italic">${esc(exp.notes)}</div>` : ""}
         </div>
         <div class="flex items-start gap-1">
           <div class="text-right">
@@ -570,6 +572,7 @@ function openAddExpense() {
   document.getElementById("save-exp-btn").textContent = "Save expense";
   document.getElementById("exp-name").value = "";
   document.getElementById("exp-amount").value = "";
+  document.getElementById("exp-notes").value = "";
   document.getElementById("exp-currency").value = state.currency;
   document.getElementById("fx-rate-row").classList.add("hidden");
   splitMode = "equal";
@@ -587,6 +590,7 @@ function openEditExpense(expenseId) {
   document.getElementById("save-exp-btn").textContent = "Update";
   document.getElementById("exp-name").value   = exp.itemName || "";
   document.getElementById("exp-amount").value = exp.amount || "";
+  document.getElementById("exp-notes").value  = exp.notes || "";
   document.getElementById("exp-currency").value = exp.currency || state.currency;
   splitMode = "equal";
   populateExpenseModal();
@@ -625,6 +629,7 @@ function populateExpenseModal() {
 async function saveExpense() {
   const itemName    = v("exp-name").trim(), amount = parseFloat(v("exp-amount")),
         currency    = v("exp-currency"), category = v("exp-category"),
+        notes       = v("exp-notes").trim(),
         payerSel    = document.getElementById("exp-payer"),
         payerId     = payerSel.value, payerName = payerSel.options[payerSel.selectedIndex].text,
         splitBetween = [...document.querySelectorAll("#exp-split .check-item.checked")].map(el=>el.dataset.id);
@@ -646,7 +651,9 @@ async function saveExpense() {
   if (currency !== state.currency && fxVal) await maybeSaveFxFromExpense(currency, fxVal);
   try {
     if (editingExpenseId) {
-      await api("editExpense", { expenseId:editingExpenseId, projectId:state.projectId, itemName, amount, currency, payerId, payerName, splitBetween, category, customSplits });
+      await api("editExpense", { expenseId:editingExpenseId, projectId:state.projectId, itemName, amount, currency, payerId, payerName, splitBetween, category, customSplits, notes });
+    } else {
+      await api("addExpense", { projectId:state.projectId, itemName, amount, currency, payerId, payerName, splitBetween, category, customSplits, notes });
     } else {
       await api("addExpense", { projectId:state.projectId, itemName, amount, currency, payerId, payerName, splitBetween, category, customSplits });
     }
@@ -774,22 +781,22 @@ async function scanReceipt(input) {
           role: "user",
           content: [
             { type: "image", source: { type: "base64", media_type: file.type, data: base64 } },
-            { type: "text", text: `You are an expense tracker assistant. Analyse this receipt image and extract the following. Return ONLY a valid JSON object, no explanation, no markdown.
+            { type: "text", text: `You are an expense tracker assistant. Analyse this receipt and return ONLY a valid JSON object, no explanation, no markdown.
 
 {
-  "itemName": "Vendor Name, Sub-category, DD Mon YYYY",
+  "itemName": "Vendor, Sub-category, DD Mon YYYY",
   "amount": 123.45,
   "currency": "HKD",
   "category": "Meals",
-  "notes": "optional short note e.g. 8 people, alcohol included"
+  "notes": "key items summary"
 }
 
 Rules:
-- itemName: combine vendor name + sub-category (e.g. Dinner, Lunch, Drinks, Snacks, Coffee, Taxi, Hotel, Ticket) + receipt date if visible. Example: "Mott 32, Dinner, 19 Apr 2025"
-- amount: the final total payable amount (after tax, service charge, discounts)
-- currency: 3-letter code from the receipt. Default HKD if ambiguous.
-- category: ONE broad category from this list only — Meals, Drinks, Transport, Accommodation, Entertainment, Shopping, Groceries, Health, Activities, Other
-- notes: any useful detail (number of people if shown, special items, tip amount). Leave empty string if nothing notable.` }
+- itemName: 3 parts only — (1) vendor/restaurant name shortened, (2) ONE sub-category word e.g. Dinner, Lunch, Coffee, Drinks, Taxi, Stay, Ticket, Snacks (3) date if visible. Max 40 chars total. Example: "Mott 32, Dinner, 19 Apr"
+- amount: final total after tax/service/discounts
+- currency: 3-letter code. Default HKD if unclear.
+- category: ONE word from — Meals, Drinks, Transport, Accommodation, Entertainment, Shopping, Groceries, Health, Activities, Other
+- notes: summarise key line items in one short line e.g. "2x steak, 1x wine, service 10%". Include headcount if shown. Max 80 chars.` }
           ]
         }]
       })
@@ -824,9 +831,8 @@ Rules:
         } catch(e) {}
       }
     }
-    // Show notes as toast if present
-    if (parsed.notes) toast(`📋 ${parsed.notes}`);
-    else toast("Receipt scanned ✓ — review the details");
+    if (parsed.notes) document.getElementById("exp-notes").value = parsed.notes;
+    toast("Receipt scanned ✓ — review the details");
   } catch(e) {
     toast("Could not read receipt — fill in manually");
   } finally {
