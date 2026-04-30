@@ -607,7 +607,8 @@ function openEditExpense(expenseId) {
   document.querySelectorAll("#exp-split .check-item").forEach(el=>{
     const checked=splitIds.includes(el.dataset.id); el.classList.toggle("checked",checked); el.querySelector("input").checked=checked;
   });
-  onExpCurrencyChange(exp.currency||state.currency); setSplitMode("equal");
+  onExpCurrencyChange(exp.currency||state.currency);
+  if (exp.customSplits) setSplitMode("custom"); else setSplitMode("equal");
   showModal("modal-expense");
 }
 
@@ -646,7 +647,7 @@ async function saveExpense() {
   if(currency!==state.currency&&fxVal) await maybeSaveFxFromExpense(currency,fxVal);
   try {
     if(editingExpenseId){
-      await api("editExpense",{expenseId:editingExpenseId,projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits});
+      await api("editExpense",{expenseId:editingExpenseId,projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits:customSplits||""});
     } else {
       await api("addExpense",{projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits});
     }
