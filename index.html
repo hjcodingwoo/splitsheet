@@ -58,6 +58,8 @@
   .guide-step{display:flex;gap:14px;align-items:flex-start;margin-bottom:18px;}
   .guide-num{width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;}
   .guide-step:last-child{margin-bottom:0;}
+  .payment-row{padding:10px 0;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:8px;font-size:13px;}
+  .payment-row:last-child{border-bottom:none;}
   @keyframes spin{to{transform:rotate(360deg);}}
   @media(max-width:600px){.modal{padding:20px;}.card{padding:16px;}}
 </style>
@@ -76,7 +78,7 @@
     <div style="background:var(--cream);border-radius:8px;padding:18px;margin-bottom:20px">
       <div class="guide-step"><div class="guide-num">1</div><div><div style="font-weight:600;font-size:13px">Got a link?</div><div style="font-size:12px;color:#666;margin-top:2px">Paste it in "Join a project" — the ID fills automatically.</div></div></div>
       <div class="guide-step"><div class="guide-num">2</div><div><div style="font-weight:600;font-size:13px">Enter your name</div><div style="font-size:12px;color:#666;margin-top:2px">Use the same name every time you return.</div></div></div>
-      <div class="guide-step"><div class="guide-num">3</div><div><div style="font-weight:600;font-size:13px">Log expenses</div><div style="font-size:12px;color:#666;margin-top:2px">Record who paid, how much, and who to split with. Scan receipts with 📷.</div></div></div>
+      <div class="guide-step"><div class="guide-num">3</div><div><div style="font-weight:600;font-size:13px">Log expenses</div><div style="font-size:12px;color:#666;margin-top:2px">Record who paid, how much, and who to split with.</div></div></div>
       <div class="guide-step"><div class="guide-num">4</div><div><div style="font-weight:600;font-size:13px">Settle Up</div><div style="font-size:12px;color:#666;margin-top:2px">The app calculates the fewest payments to clear all debts.</div></div></div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
@@ -138,11 +140,15 @@
 <!-- DIRECTORY -->
 <div id="view-directory" class="hidden min-h-screen px-4 py-12">
   <div class="w-full max-w-lg mx-auto">
-    <div class="flex items-center gap-4 mb-8">
+    <div class="flex items-center gap-4 mb-6">
       <button class="btn btn-ghost" onclick="hideDirectory()">← Back</button>
       <h2 style="font-family:var(--serif);font-size:1.75rem">All Projects</h2>
     </div>
-    <div id="directory-list" class="card"><div class="text-sm text-gray-400 text-center py-8">Loading…</div></div>
+    <div id="directory-list" class="card mb-6"><div class="text-sm text-gray-400 text-center py-8">Loading…</div></div>
+    <div id="dir-archived-section" style="display:none">
+      <div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:#aaa;margin-bottom:8px">ARCHIVED</div>
+      <div id="directory-archived" class="card"></div>
+    </div>
   </div>
 </div>
 
@@ -242,7 +248,24 @@
       <div class="text-xs font-medium" style="color:var(--accent)">⚠️ Missing FX rates — set them in FX Rates tab</div>
       <div id="settle-missing-list" style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-top:4px"></div>
     </div>
-    <div id="settle-list" class="card"><div class="text-sm text-gray-400 text-center py-8">Add expenses to calculate.</div></div>
+    <div id="settle-list" class="card mb-4"><div class="text-sm text-gray-400 text-center py-8">Add expenses to calculate.</div></div>
+    <!-- Manual payments -->
+    <div class="card">
+      <div style="font-family:var(--mono);font-size:11px;color:#aaa;margin-bottom:4px">RECORD A PAYMENT</div>
+      <div style="font-size:12px;color:#888;margin-bottom:12px">Record when someone has already paid another person outside the app. This adjusts the remaining balances.</div>
+      <div class="grid gap-3">
+        <div class="grid grid-cols-2 gap-3">
+          <div><label>From (payer)</label><select id="pay-from"></select></div>
+          <div><label>To (recipient)</label><select id="pay-to"></select></div>
+        </div>
+        <div><label>Amount (<span id="pay-ccy-label"></span>)</label>
+          <input id="pay-amount" type="number" min="0" step="0.01" placeholder="0.00"></div>
+        <div><label>Note (optional)</label>
+          <input id="pay-note" type="text" placeholder="e.g. Bank transfer 19 Apr"></div>
+        <button class="btn btn-primary w-full" onclick="recordPayment()">Record payment</button>
+      </div>
+      <div id="payments-list" style="margin-top:16px"></div>
+    </div>
   </div>
 
   <!-- Tab: Members -->
@@ -289,20 +312,10 @@
 <!-- ADD / EDIT EXPENSE MODAL -->
 <div id="modal-expense" class="modal-bg hidden" onclick="closeIfBg(event,'modal-expense')">
   <div class="modal">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-      <h2 id="exp-modal-title" style="font-family:var(--serif);font-size:1.5rem">New expense</h2>
-      <label style="text-transform:none;letter-spacing:0;font-size:12px;color:var(--accent);cursor:pointer;margin:0;display:flex;align-items:center;gap:4px;border:1.5px solid var(--accent);padding:5px 10px;border-radius:4px;white-space:nowrap" for="receipt-upload">
-        📷 Scan receipt
-      </label>
-      <input type="file" id="receipt-upload" accept="image/*" style="display:none" onchange="scanReceipt(this)">
-    </div>
-    <div id="receipt-scanning" style="display:none;text-align:center;padding:12px;background:var(--cream);border-radius:6px;font-size:13px;color:#888;margin-bottom:12px">
-      <div style="display:inline-block;width:14px;height:14px;border:2px solid #ccc;border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:middle"></div>
-      Reading receipt with AI…
-    </div>
+    <h2 id="exp-modal-title" style="font-family:var(--serif);font-size:1.5rem;margin-bottom:20px">New expense</h2>
     <div class="grid gap-4">
       <div><label>Item name</label><input id="exp-name" type="text" placeholder="Vendor, sub-category, date…"></div>
-      <div><label>Notes <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#bbb">(optional)</span></label><input id="exp-notes" type="text" placeholder="e.g. 2x steak, 1x wine, 8 pax"></div>
+      <div><label>Notes <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#bbb;font-size:11px">(optional)</span></label><input id="exp-notes" type="text" placeholder="e.g. 2x steak, 1x wine, 8 pax"></div>
       <div><label>Category</label>
         <div class="flex gap-2">
           <select id="exp-category" style="flex:1"><option value="">— None —</option></select>
@@ -330,13 +343,13 @@
       <div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
           <label style="margin:0">Split between</label>
-          <div style="display:flex;gap:4px">
-            <button onclick="setSplitMode('equal')" id="split-mode-equal" style="font-size:11px;padding:3px 10px;border-radius:4px;border:1.5px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer;font-family:var(--sans)">Equal</button>
-            <button onclick="setSplitMode('custom')" id="split-mode-custom" style="font-size:11px;padding:3px 10px;border-radius:4px;border:1.5px solid var(--rule);background:transparent;color:#888;cursor:pointer;font-family:var(--sans)">Custom</button>
+          <div style="display:flex;gap:4px;align-items:center">
+            <button class="btn btn-ghost text-xs" onclick="setSplitMode('equal')" id="split-mode-equal" style="font-size:11px;padding:3px 8px;border-radius:4px;background:var(--ink);color:#fff">Equal</button>
+            <button class="btn btn-ghost text-xs" onclick="setSplitMode('custom')" id="split-mode-custom" style="font-size:11px;padding:3px 8px;border-radius:4px">Custom</button>
           </div>
         </div>
         <div id="exp-split" class="check-grid mt-1"></div>
-        <div id="exp-split-custom" style="display:none;margin-top:10px;background:var(--cream);border-radius:6px;padding:12px"></div>
+        <div id="exp-split-custom" style="display:none;margin-top:8px"></div>
         <div id="split-warning" style="font-size:11px;color:var(--accent);margin-top:4px;display:none"></div>
         <div class="flex gap-2 mt-2">
           <button class="btn btn-ghost text-xs" onclick="selectAllSplit()">All</button>
@@ -370,6 +383,7 @@ const PIE_COLORS = ["#c1440e","#2d6a4f","#4a7fbd","#b5860d","#7b4fa6","#c0704a",
 let state = {
   projectId:null, project:null, members:[], expenses:[],
   fxRates:{}, categories:[], me:null, currency:"USD", totalsFilter:"all",
+  payments:[],
 };
 let editingExpenseId = null;
 let splitMode = "equal";
@@ -384,14 +398,8 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 // ── GUIDE ─────────────────────────────────────────────────
-function showGuide() {
-  document.getElementById("guide-no-show").checked = false;
-  document.getElementById("modal-guide").style.display = "flex";
-}
-function closeGuide() {
-  if (document.getElementById("guide-no-show").checked) localStorage.setItem("sc_guide_seen","1");
-  document.getElementById("modal-guide").style.display = "none";
-}
+function showGuide() { document.getElementById("guide-no-show").checked=false; document.getElementById("modal-guide").style.display="flex"; }
+function closeGuide() { if(document.getElementById("guide-no-show").checked) localStorage.setItem("sc_guide_seen","1"); document.getElementById("modal-guide").style.display="none"; }
 
 // ── API ───────────────────────────────────────────────────
 function api(action, params = {}) {
@@ -401,12 +409,8 @@ function api(action, params = {}) {
     const cb = "_cb_" + Date.now();
     all.callback = cb;
     const url = new URL(API_URL);
-    for (const [k,val] of Object.entries(all)) if (val !== undefined) url.searchParams.set(k, val === null ? "" : String(val));
-    window[cb] = (data) => {
-      delete window[cb];
-      document.getElementById("jsonp-container").innerHTML = "";
-      if (data.error) reject(new Error(data.error)); else resolve(data);
-    };
+    for (const [k,val] of Object.entries(all)) if (val !== undefined && val !== null) url.searchParams.set(k, String(val));
+    window[cb] = (data) => { delete window[cb]; document.getElementById("jsonp-container").innerHTML=""; if(data.error) reject(new Error(data.error)); else resolve(data); };
     const s = document.createElement("script");
     s.src = url.toString();
     s.onerror = () => { delete window[cb]; reject(new Error("Failed to reach server.")); };
@@ -414,511 +418,418 @@ function api(action, params = {}) {
   });
 }
 
-function parseProjectInput(val) {
-  try { const u = new URL(val); const p = u.searchParams.get("p"); if (p) document.getElementById("join-id").value = p; } catch {}
-}
-
-// ── FX HELPERS ────────────────────────────────────────────
-function toBase(amount, ccy) {
-  const base = state.currency;
-  ccy = (ccy || base).toUpperCase();
-  if (ccy === base) return parseFloat(amount) || 0;
-  const rate = state.fxRates[ccy];
-  if (rate === undefined || rate === null) return null;
-  return (parseFloat(amount) || 0) * rate;
-}
-
-function cleanCat(raw) {
-  const s = String(raw || "").trim();
-  return (s && s !== "0") ? s : "Uncategorised";
-}
+function parseProjectInput(val) { try { const u=new URL(val); const p=u.searchParams.get("p"); if(p) document.getElementById("join-id").value=p; } catch {} }
+function toBase(amount, ccy) { const base=state.currency; ccy=(ccy||base).toUpperCase(); if(ccy===base) return parseFloat(amount)||0; const rate=state.fxRates[ccy]; if(rate===undefined||rate===null) return null; return (parseFloat(amount)||0)*rate; }
+function cleanCat(raw) { const s=String(raw||"").trim(); return (s&&s!=="0")?s:"Uncategorised"; }
 
 // ── TOTALS BUILDER ────────────────────────────────────────
 function buildTotals(filterMemberId) {
-  const byCategory = {}, byPerson = {};
-  let grandTotal = 0, hasMissing = false;
+  const byCategory={},byPerson={};
+  let grandTotal=0,hasMissing=false;
   state.expenses.forEach(exp => {
-    const converted = toBase(exp.amount, exp.currency || state.currency);
-    if (converted === null) { hasMissing = true; return; }
-    const cat   = cleanCat(exp.category);
-    const split = (Array.isArray(exp.splitBetween) ? exp.splitBetween : String(exp.splitBetween).split(",")).filter(s => s);
-    if (!filterMemberId || filterMemberId === "all") {
-      grandTotal += converted;
-      byCategory[cat] = (byCategory[cat] || 0) + converted;
-      byPerson[exp.payerName] = (byPerson[exp.payerName] || 0) + converted;
+    const converted=toBase(exp.amount,exp.currency||state.currency);
+    if(converted===null){hasMissing=true;return;}
+    const cat=cleanCat(exp.category);
+    const split=(Array.isArray(exp.splitBetween)?exp.splitBetween:String(exp.splitBetween).split(",")).filter(s=>s);
+    if(!filterMemberId||filterMemberId==="all"){
+      grandTotal+=converted; byCategory[cat]=(byCategory[cat]||0)+converted; byPerson[exp.payerName]=(byPerson[exp.payerName]||0)+converted;
     } else {
-      if (!split.includes(filterMemberId)) return;
-      const share = converted / split.length;
-      grandTotal += share;
-      byCategory[cat] = (byCategory[cat] || 0) + share;
-      byPerson[exp.payerName] = (byPerson[exp.payerName] || 0) + share;
+      if(!split.includes(filterMemberId)) return;
+      const share=converted/split.length; grandTotal+=share; byCategory[cat]=(byCategory[cat]||0)+share; byPerson[exp.payerName]=(byPerson[exp.payerName]||0)+share;
     }
   });
-  return { byCategory, byPerson, grandTotal, hasMissing };
+  return {byCategory,byPerson,grandTotal,hasMissing};
 }
 
 // ── PROJECT ───────────────────────────────────────────────
 async function createProject() {
-  const name = v("new-name").trim(), currency = v("new-currency"), myName = v("creator-name").trim();
-  if (!name)   return toast("Enter a project name");
-  if (!myName) return toast("Enter your name");
+  const name=v("new-name").trim(),currency=v("new-currency"),myName=v("creator-name").trim();
+  if(!name) return toast("Enter a project name");
+  if(!myName) return toast("Enter your name");
   showLoading("Creating project…");
   try {
-    const res = await api("createProject", { name, currency });
-    const mem = await api("addMember", { projectId: res.projectId, name: myName });
-    saveLocalMe(res.projectId, mem.memberId, myName);
-    await loadProject(res.projectId); updateURL(res.projectId);
-    loadAllProjectsCache();
-  } catch(e) { toast(e.message); } finally { hideLoading(); }
+    const res=await api("createProject",{name,currency});
+    const mem=await api("addMember",{projectId:res.projectId,name:myName});
+    saveLocalMe(res.projectId,mem.memberId,myName);
+    await loadProject(res.projectId); updateURL(res.projectId); loadAllProjectsCache();
+  } catch(e){toast(e.message);}finally{hideLoading();}
 }
 
 async function joinProject() {
-  const projectId = v("join-id").trim(), myName = v("join-name").trim();
-  if (!projectId) return toast("Enter a project ID");
-  if (!myName)    return toast("Enter your name");
+  const projectId=v("join-id").trim(),myName=v("join-name").trim();
+  if(!projectId) return toast("Enter a project ID");
+  if(!myName) return toast("Enter your name");
   showLoading("Joining project…");
   try {
-    const mem = await api("addMember", { projectId, name: myName });
-    saveLocalMe(projectId, mem.memberId, myName);
+    const mem=await api("addMember",{projectId,name:myName});
+    saveLocalMe(projectId,mem.memberId,myName);
     await loadProject(projectId); updateURL(projectId);
-  } catch(e) { toast(e.message); } finally { hideLoading(); }
+  } catch(e){toast(e.message);}finally{hideLoading();}
 }
 
 async function loadProject(projectId) {
   showLoading("Loading project…");
   try {
-    const projRes = await api("getProject", { projectId });
-    const expRes  = await api("getExpenses", { projectId });
-    state.projectId  = projectId;
-    state.project    = projRes.project;
-    state.members    = projRes.members;
-    state.expenses   = expRes.expenses;
-    state.fxRates    = projRes.fxRates || {};
-    state.categories = projRes.categories || [];
-    state.currency   = projRes.project.defaultCurrency || "USD";
-    state.me = loadLocalMe(projectId) || null;
-    renderProject();
-    show("view-project"); hide("view-landing");
-  } catch(e) { toast("Error: " + e.message); } finally { hideLoading(); }
+    const projRes=await api("getProject",{projectId});
+    const expRes=await api("getExpenses",{projectId});
+    const payRes=await api("getPayments",{projectId});
+    state.projectId=projectId; state.project=projRes.project; state.members=projRes.members;
+    state.expenses=expRes.expenses; state.fxRates=projRes.fxRates||{}; state.categories=projRes.categories||[];
+    state.currency=projRes.project.defaultCurrency||"USD"; state.payments=payRes.payments||[];
+    state.me=loadLocalMe(projectId)||null;
+    renderProject(); show("view-project"); hide("view-landing");
+  } catch(e){toast("Error: "+e.message);}finally{hideLoading();}
 }
 
 function renderProject() {
-  document.getElementById("hdr-name").textContent = state.project.name;
-  document.getElementById("hdr-members").textContent = state.members.map(m => m.name).join(" · ") || "No members";
+  document.getElementById("hdr-name").textContent=state.project.name;
+  document.getElementById("hdr-members").textContent=state.members.map(m=>m.name).join(" · ")||"No members";
   renderExpenses();
 }
 
 async function promptRenameProject() {
-  const newName = prompt("New project name:", state.project.name);
-  if (!newName || !newName.trim() || newName.trim() === state.project.name) return;
+  const newName=prompt("New project name:",state.project.name);
+  if(!newName||!newName.trim()||newName.trim()===state.project.name) return;
   showLoading("Renaming…");
   try {
-    await api("renameProject", { projectId: state.projectId, newName: newName.trim() });
-    state.project.name = newName.trim();
-    document.getElementById("hdr-name").textContent = newName.trim();
-    toast("Project renamed ✓");
-  } catch(e) { toast(e.message); } finally { hideLoading(); }
+    await api("renameProject",{projectId:state.projectId,newName:newName.trim()});
+    state.project.name=newName.trim(); document.getElementById("hdr-name").textContent=newName.trim(); toast("Project renamed ✓");
+  } catch(e){toast(e.message);}finally{hideLoading();}
 }
 
 // ── EXPENSES ──────────────────────────────────────────────
 function renderExpenses() {
-  const { expenses, members } = state;
-  const list = document.getElementById("expense-list");
-  document.getElementById("exp-count").textContent = `${expenses.length} expense${expenses.length !== 1 ? "s" : ""}`;
-  if (!expenses.length) { list.innerHTML = `<div class="text-sm text-gray-400 text-center py-8">No expenses yet. Add the first one!</div>`; return; }
-  const memberMap = {};
-  members.forEach(m => memberMap[m.memberId] = m.name);
-  const sorted = [...expenses].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
-  list.innerHTML = sorted.map(exp => {
-    const splitNames = exp.splitBetween.map(id => memberMap[id] || id).join(", ");
-    const date    = new Date(exp.createdAt).toLocaleDateString("en-GB", { day:"numeric", month:"short" });
-    const isMine  = state.me && exp.payerId === state.me.memberId;
-    const cat     = cleanCat(exp.category);
-    const catPill = cat !== "Uncategorised" ? `<span class="pill pill-currency" style="margin-left:4px">${esc(cat)}</span>` : "";
-    const baseAmt  = toBase(exp.amount, exp.currency || state.currency);
-    const convNote = (exp.currency && exp.currency !== state.currency && baseAmt !== null)
-      ? `<span style="font-family:var(--mono);font-size:10px;color:#aaa;display:block">≈ ${formatAmt(baseAmt)} ${state.currency}</span>` : "";
-    const hasCustom = exp.customSplits ? `<span style="font-family:var(--mono);font-size:10px;color:var(--green)">custom split</span>` : "";
-    return `
-      <div class="expense-row">
-        <div>
-          <div class="font-medium text-sm">${esc(exp.itemName)} ${catPill}</div>
-          <div class="text-xs text-gray-400 mt-0.5">Paid by <strong>${esc(exp.payerName)}</strong>${isMine?' <span style="color:var(--accent)">· you</span>':''} · Split: ${esc(splitNames)}</div>
-          <div style="font-family:var(--mono);font-size:10px;color:#bbb;margin-top:2px">${date} ${hasCustom}</div>
-          ${exp.notes ? `<div class="text-xs mt-0.5" style="color:#aaa;font-style:italic">${esc(exp.notes)}</div>` : ""}
+  const{expenses,members}=state;
+  const list=document.getElementById("expense-list");
+  document.getElementById("exp-count").textContent=`${expenses.length} expense${expenses.length!==1?"s":""}`;
+  if(!expenses.length){list.innerHTML=`<div class="text-sm text-gray-400 text-center py-8">No expenses yet. Add the first one!</div>`;return;}
+  const memberMap={};
+  members.forEach(m=>memberMap[m.memberId]=m.name);
+  const sorted=[...expenses].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  list.innerHTML=sorted.map(exp=>{
+    const splitNames=exp.splitBetween.map(id=>memberMap[id]||id).join(", ");
+    const date=new Date(exp.createdAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+    const isMine=state.me&&exp.payerId===state.me.memberId;
+    const cat=cleanCat(exp.category);
+    const catPill=cat!=="Uncategorised"?`<span class="pill pill-currency" style="margin-left:4px">${esc(cat)}</span>`:"";
+    const baseAmt=toBase(exp.amount,exp.currency||state.currency);
+    const convNote=(exp.currency&&exp.currency!==state.currency&&baseAmt!==null)?`<span style="font-family:var(--mono);font-size:10px;color:#aaa;display:block">≈ ${formatAmt(baseAmt)} ${state.currency}</span>`:"";
+    const noteLine=exp.notes?`<div class="text-xs mt-0.5" style="color:#aaa;font-style:italic">${esc(exp.notes)}</div>`:"";
+    return `<div class="expense-row">
+      <div>
+        <div class="font-medium text-sm">${esc(exp.itemName)} ${catPill}</div>
+        <div class="text-xs text-gray-400 mt-0.5">Paid by <strong>${esc(exp.payerName)}</strong>${isMine?' <span style="color:var(--accent)">· you</span>':''} · Split: ${esc(splitNames)}</div>
+        ${noteLine}
+        <div style="font-family:var(--mono);font-size:10px;color:#bbb;margin-top:2px">${date}</div>
+      </div>
+      <div class="flex items-start gap-1">
+        <div class="text-right">
+          <div class="font-medium">${formatAmt(exp.amount)}</div>
+          <span class="pill pill-currency">${exp.currency||state.currency}</span>
+          ${convNote}
         </div>
-        <div class="flex items-start gap-1">
-          <div class="text-right">
-            <div class="font-medium">${formatAmt(exp.amount)}</div>
-            <span class="pill pill-currency">${exp.currency || state.currency}</span>
-            ${convNote}
-          </div>
-          <div style="display:flex;flex-direction:column;gap:2px;margin-top:2px">
-            <button class="btn btn-ghost" style="padding:2px 5px;font-size:11px" onclick="openEditExpense('${exp.expenseId}')" title="Edit">✏️</button>
-            <button class="btn btn-ghost" style="padding:2px 5px;" onclick="deleteExpense('${exp.expenseId}')" title="Delete">
-              <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-            </button>
-          </div>
+        <div style="display:flex;flex-direction:column;gap:2px;margin-top:2px">
+          <button class="btn btn-ghost" style="padding:2px 5px;font-size:11px" onclick="openEditExpense('${exp.expenseId}')" title="Edit">✏️</button>
+          <button class="btn btn-ghost" style="padding:2px 5px;" onclick="deleteExpense('${exp.expenseId}')" title="Delete">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          </button>
         </div>
-      </div>`;
+      </div>
+    </div>`;
   }).join("");
 }
 
 // ── EXPENSE MODAL ─────────────────────────────────────────
 function openAddExpense() {
-  if (!state.members.length) return toast("No members yet");
-  editingExpenseId = null;
-  document.getElementById("exp-modal-title").textContent = "New expense";
-  document.getElementById("save-exp-btn").textContent = "Save expense";
-  document.getElementById("exp-name").value = "";
-  document.getElementById("exp-amount").value = "";
-  document.getElementById("exp-notes").value = "";
-  document.getElementById("exp-currency").value = state.currency;
+  if(!state.members.length) return toast("No members yet");
+  editingExpenseId=null;
+  document.getElementById("exp-modal-title").textContent="New expense";
+  document.getElementById("save-exp-btn").textContent="Save expense";
+  document.getElementById("exp-name").value="";
+  document.getElementById("exp-notes").value="";
+  document.getElementById("exp-amount").value="";
+  document.getElementById("exp-currency").value=state.currency;
   document.getElementById("fx-rate-row").classList.add("hidden");
-  splitMode = "equal";
-  populateExpenseModal();
-  setSplitMode("equal");
-  showModal("modal-expense");
-  document.getElementById("exp-name").focus();
+  splitMode="equal"; populateExpenseModal(); setSplitMode("equal");
+  showModal("modal-expense"); document.getElementById("exp-name").focus();
 }
 
 function openEditExpense(expenseId) {
-  const exp = state.expenses.find(e => String(e.expenseId).trim() === String(expenseId).trim());
-  if (!exp) return toast("Expense not found");
-  editingExpenseId = expenseId;
-  document.getElementById("exp-modal-title").textContent = "Edit expense";
-  document.getElementById("save-exp-btn").textContent = "Update";
-  document.getElementById("exp-name").value   = exp.itemName || "";
-  document.getElementById("exp-amount").value = exp.amount || "";
-  document.getElementById("exp-notes").value  = exp.notes || "";
-  document.getElementById("exp-currency").value = exp.currency || state.currency;
-  splitMode = "equal";
-  populateExpenseModal();
-  document.getElementById("exp-payer").value = exp.payerId;
-  const catVal = (exp.category && exp.category.trim() && exp.category !== "0") ? exp.category.trim() : "";
-  document.getElementById("exp-category").value = catVal;
-  const splitIds = Array.isArray(exp.splitBetween) ? exp.splitBetween.filter(s=>s) : String(exp.splitBetween).split(",").filter(s=>s);
-  document.querySelectorAll("#exp-split .check-item").forEach(el => {
-    const checked = splitIds.includes(el.dataset.id);
-    el.classList.toggle("checked", checked);
-    el.querySelector("input").checked = checked;
+  const exp=state.expenses.find(e=>String(e.expenseId).trim()===String(expenseId).trim());
+  if(!exp) return toast("Expense not found");
+  editingExpenseId=expenseId;
+  document.getElementById("exp-modal-title").textContent="Edit expense";
+  document.getElementById("save-exp-btn").textContent="Update";
+  document.getElementById("exp-name").value=exp.itemName||"";
+  document.getElementById("exp-notes").value=exp.notes||"";
+  document.getElementById("exp-amount").value=exp.amount||"";
+  document.getElementById("exp-currency").value=exp.currency||state.currency;
+  splitMode="equal"; populateExpenseModal();
+  document.getElementById("exp-payer").value=exp.payerId;
+  const catVal=(exp.category&&exp.category.trim()&&exp.category!=="0")?exp.category.trim():"";
+  document.getElementById("exp-category").value=catVal;
+  const splitIds=Array.isArray(exp.splitBetween)?exp.splitBetween.filter(s=>s):String(exp.splitBetween).split(",").filter(s=>s);
+  document.querySelectorAll("#exp-split .check-item").forEach(el=>{
+    const checked=splitIds.includes(el.dataset.id); el.classList.toggle("checked",checked); el.querySelector("input").checked=checked;
   });
-  onExpCurrencyChange(exp.currency || state.currency);
-  setSplitMode("equal");
+  onExpCurrencyChange(exp.currency||state.currency); setSplitMode("equal");
   showModal("modal-expense");
 }
 
 function populateExpenseModal() {
-  const payerSel = document.getElementById("exp-payer");
-  payerSel.innerHTML = state.members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
-  if (state.me) payerSel.value = state.me.memberId;
-  const catSel = document.getElementById("exp-category");
-  catSel.innerHTML = `<option value="">— None —</option>` + state.categories.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
-  const splitDiv = document.getElementById("exp-split");
-  splitDiv.innerHTML = state.members.map(m=>`<label class="check-item checked" data-id="${m.memberId}" data-name="${esc(m.name)}"><input type="checkbox" checked value="${m.memberId}">${esc(m.name)}</label>`).join("");
+  const payerSel=document.getElementById("exp-payer");
+  payerSel.innerHTML=state.members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
+  if(state.me) payerSel.value=state.me.memberId;
+  const catSel=document.getElementById("exp-category");
+  catSel.innerHTML=`<option value="">— None —</option>`+state.categories.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
+  const splitDiv=document.getElementById("exp-split");
+  splitDiv.innerHTML=state.members.map(m=>`<label class="check-item checked" data-id="${m.memberId}" data-name="${esc(m.name)}"><input type="checkbox" checked value="${m.memberId}">${esc(m.name)}</label>`).join("");
   splitDiv.querySelectorAll(".check-item").forEach(el=>{
-    el.addEventListener("click", e=>{
-      e.preventDefault();
-      el.classList.toggle("checked");
-      el.querySelector("input").checked = el.classList.contains("checked");
-      if (splitMode === "custom") renderCustomSplit();
-    });
+    el.addEventListener("click",e=>{e.preventDefault();el.classList.toggle("checked");el.querySelector("input").checked=el.classList.contains("checked");if(splitMode==="custom")renderCustomSplit();});
   });
 }
 
 async function saveExpense() {
-  const itemName    = v("exp-name").trim(), amount = parseFloat(v("exp-amount")),
-        currency    = v("exp-currency"), category = v("exp-category"),
-        notes       = v("exp-notes").trim(),
-        payerSel    = document.getElementById("exp-payer"),
-        payerId     = payerSel.value, payerName = payerSel.options[payerSel.selectedIndex].text,
-        splitBetween = [...document.querySelectorAll("#exp-split .check-item.checked")].map(el=>el.dataset.id);
-  if (!itemName)             return toast("Enter an item name");
-  if (!amount || amount <= 0) return toast("Enter a valid amount");
-  if (!splitBetween.length)  return toast("Select at least one person");
-
-  let customSplits = null;
-  if (splitMode === "custom") {
-    const cs = getCustomSplits();
-    const total = Object.values(cs).reduce((s,v)=>s+v, 0);
-    if (Math.abs(total - amount) > 0.02) return toast(`Split total (${formatAmt(total)}) doesn't match amount (${formatAmt(amount)})`);
-    customSplits = JSON.stringify(cs);
+  const itemName=v("exp-name").trim(),amount=parseFloat(v("exp-amount")),
+        currency=v("exp-currency"),category=v("exp-category"),notes=v("exp-notes").trim(),
+        payerSel=document.getElementById("exp-payer"),
+        payerId=payerSel.value,payerName=payerSel.options[payerSel.selectedIndex].text,
+        splitBetween=[...document.querySelectorAll("#exp-split .check-item.checked")].map(el=>el.dataset.id);
+  if(!itemName) return toast("Enter an item name");
+  if(!amount||amount<=0) return toast("Enter a valid amount");
+  if(!splitBetween.length) return toast("Select at least one person");
+  let customSplits=null;
+  if(splitMode==="custom"){
+    const cs=getCustomSplits();
+    const total=Object.values(cs).reduce((s,val)=>s+val,0);
+    if(Math.abs(total-amount)>0.02) return toast(`Split total (${formatAmt(total)}) doesn't match amount (${formatAmt(amount)})`);
+    customSplits=JSON.stringify(cs);
   }
-
-  const btn = document.getElementById("save-exp-btn");
-  btn.disabled = true; btn.innerHTML = `<span class="spin"></span>`;
-  const fxVal = document.getElementById("exp-fx-rate").value;
-  if (currency !== state.currency && fxVal) await maybeSaveFxFromExpense(currency, fxVal);
+  const btn=document.getElementById("save-exp-btn");
+  btn.disabled=true; btn.innerHTML=`<span class="spin"></span>`;
+  const fxVal=document.getElementById("exp-fx-rate").value;
+  if(currency!==state.currency&&fxVal) await maybeSaveFxFromExpense(currency,fxVal);
   try {
-    if (editingExpenseId) {
-      await api("editExpense", { expenseId:editingExpenseId, projectId:state.projectId, itemName, amount, currency, payerId, payerName, splitBetween, category, customSplits, notes });
+    if(editingExpenseId){
+      await api("editExpense",{expenseId:editingExpenseId,projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits});
     } else {
-      await api("addExpense", { projectId:state.projectId, itemName, amount, currency, payerId, payerName, splitBetween, category, customSplits, notes });
-    } else {
-      await api("addExpense", { projectId:state.projectId, itemName, amount, currency, payerId, payerName, splitBetween, category, customSplits });
+      await api("addExpense",{projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits});
     }
-    const expRes = await api("getExpenses", { projectId:state.projectId });
-    state.expenses = expRes.expenses; renderExpenses();
-    closeModal("modal-expense");
-    toast(editingExpenseId ? "Updated ✓" : "Expense added ✓");
-    editingExpenseId = null;
-  } catch(e) { toast(e.message); }
-  finally { btn.disabled=false; btn.textContent = editingExpenseId ? "Update" : "Save expense"; }
+    const expRes=await api("getExpenses",{projectId:state.projectId});
+    state.expenses=expRes.expenses; renderExpenses();
+    closeModal("modal-expense"); toast(editingExpenseId?"Updated ✓":"Expense added ✓"); editingExpenseId=null;
+  } catch(e){toast(e.message);}
+  finally{btn.disabled=false;btn.textContent=editingExpenseId?"Update":"Save expense";}
 }
 
 async function deleteExpense(expenseId) {
-  if (!confirm("Delete this expense?")) return;
+  if(!confirm("Delete this expense?")) return;
   showLoading("Deleting…");
   try {
-    await api("deleteExpense", { expenseId, projectId:state.projectId });
-    const expRes = await api("getExpenses", { projectId:state.projectId });
-    state.expenses = expRes.expenses; renderExpenses(); toast("Deleted");
-  } catch(e) { toast(e.message); } finally { hideLoading(); }
+    await api("deleteExpense",{expenseId,projectId:state.projectId});
+    const expRes=await api("getExpenses",{projectId:state.projectId});
+    state.expenses=expRes.expenses; renderExpenses(); toast("Deleted");
+  } catch(e){toast(e.message);}finally{hideLoading();}
 }
 
 // ── SPLIT MODE ────────────────────────────────────────────
 function setSplitMode(mode) {
-  splitMode = mode;
-  const eq  = document.getElementById("split-mode-equal");
-  const cu  = document.getElementById("split-mode-custom");
-  eq.style.background = mode==="equal" ? "var(--ink)" : "transparent";
-  eq.style.color      = mode==="equal" ? "#fff" : "#888";
-  eq.style.borderColor= mode==="equal" ? "var(--ink)" : "var(--rule)";
-  cu.style.background = mode==="custom" ? "var(--ink)" : "transparent";
-  cu.style.color      = mode==="custom" ? "#fff" : "#888";
-  cu.style.borderColor= mode==="custom" ? "var(--ink)" : "var(--rule)";
-  document.getElementById("exp-split-custom").style.display = mode==="custom" ? "block" : "none";
-  if (mode==="custom") renderCustomSplit();
+  splitMode=mode;
+  document.getElementById("split-mode-equal").style.background=mode==="equal"?"var(--ink)":"transparent";
+  document.getElementById("split-mode-equal").style.color=mode==="equal"?"#fff":"#888";
+  document.getElementById("split-mode-custom").style.background=mode==="custom"?"var(--ink)":"transparent";
+  document.getElementById("split-mode-custom").style.color=mode==="custom"?"#fff":"#888";
+  document.getElementById("exp-split-custom").style.display=mode==="custom"?"block":"none";
+  if(mode==="custom") renderCustomSplit();
 }
 
 function renderCustomSplit() {
-  const checked = [...document.querySelectorAll("#exp-split .check-item.checked")].map(el=>({id:el.dataset.id, name:el.dataset.name}));
-  const amount  = parseFloat(document.getElementById("exp-amount").value) || 0;
-  const div     = document.getElementById("exp-split-custom");
-  if (!checked.length) { div.innerHTML=`<div style="font-size:12px;color:#aaa">Select members above first</div>`; return; }
-  const even = amount / checked.length;
-  div.innerHTML = `
-    <div style="font-size:11px;color:#888;margin-bottom:8px;font-family:var(--mono)">Leave blank to split remainder evenly</div>
-    ${checked.map(m=>`
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <div style="font-size:13px;flex:1;font-weight:500">${esc(m.name)}</div>
-        <input type="number" id="custom-split-${m.id}" data-id="${m.id}" min="0" step="0.01"
-          placeholder="${formatAmt(even)}"
-          style="width:110px;text-align:right;padding:6px 10px;font-family:var(--mono);font-size:13px;box-shadow:none"
-          oninput="updateCustomSplitTotal()">
-      </div>`).join("")}
-    <div style="border-top:1px solid var(--rule);padding-top:8px;margin-top:4px">
-      <div style="display:flex;justify-content:space-between;font-size:12px;font-family:var(--mono);margin-bottom:2px">
-        <span style="color:#888">Assigned</span><span id="custom-split-assigned" style="font-weight:500">0.00</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:12px;font-family:var(--mono)">
-        <span style="color:#888">Unassigned (split evenly)</span><span id="custom-split-remaining" style="color:var(--green);font-weight:500">0.00</span>
-      </div>
+  const checked=[...document.querySelectorAll("#exp-split .check-item.checked")].map(el=>({id:el.dataset.id,name:el.dataset.name}));
+  const amount=parseFloat(document.getElementById("exp-amount").value)||0;
+  const div=document.getElementById("exp-split-custom");
+  if(!checked.length){div.innerHTML=`<div style="font-size:12px;color:#aaa">Select members above first</div>`;return;}
+  const even=checked.length?(amount/checked.length):0;
+  div.innerHTML=`<div style="font-size:11px;color:#aaa;margin-bottom:8px;font-family:var(--mono)">Enter each person's share — remainder auto-distributes</div>
+    ${checked.map(m=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="font-size:13px;flex:1">${esc(m.name)}</div>
+      <input type="number" id="custom-split-${m.id}" data-id="${m.id}" min="0" step="0.01"
+        placeholder="${formatAmt(even)}" style="width:110px;text-align:right;padding:6px 10px;font-family:var(--mono);font-size:13px"
+        oninput="updateCustomSplitTotal()">
+    </div>`).join("")}
+    <div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--rule);font-size:12px;font-family:var(--mono)">
+      <span style="color:#888">Assigned</span><span id="custom-split-assigned" style="font-weight:500">0.00</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;font-family:var(--mono);margin-top:2px">
+      <span style="color:#888">Remaining (split evenly)</span><span id="custom-split-remaining" style="color:var(--green);font-weight:500">0.00</span>
     </div>`;
   updateCustomSplitTotal();
 }
 
 function updateCustomSplitTotal() {
-  const amount   = parseFloat(document.getElementById("exp-amount").value) || 0;
-  const inputs   = [...document.querySelectorAll("[id^='custom-split-']:not([id='custom-split-assigned']):not([id='custom-split-remaining'])")];
-  const assigned = inputs.reduce((s,inp)=>s+(parseFloat(inp.value)||0), 0);
-  const remaining = amount - assigned;
-  const el1 = document.getElementById("custom-split-assigned");
-  const el2 = document.getElementById("custom-split-remaining");
-  if (el1) el1.textContent = formatAmt(assigned);
-  if (el2) { el2.textContent = formatAmt(Math.max(0, remaining)); el2.style.color = remaining < -0.01 ? "var(--accent)" : "var(--green)"; }
-  const warn = document.getElementById("split-warning");
-  if (assigned > amount + 0.01) { warn.textContent="⚠️ Assigned exceeds total"; warn.style.display="block"; }
-  else { warn.style.display="none"; }
+  const amount=parseFloat(document.getElementById("exp-amount").value)||0;
+  const inputs=[...document.querySelectorAll("[id^='custom-split-']")];
+  const assigned=inputs.reduce((s,inp)=>s+(parseFloat(inp.value)||0),0);
+  const remaining=Math.max(0,amount-assigned);
+  const el1=document.getElementById("custom-split-assigned");
+  const el2=document.getElementById("custom-split-remaining");
+  if(el1) el1.textContent=formatAmt(assigned);
+  if(el2){el2.textContent=formatAmt(remaining);el2.style.color=remaining<-0.01?"var(--accent)":"var(--green)";}
+  const warn=document.getElementById("split-warning");
+  if(assigned>amount+0.01){warn.textContent="⚠️ Assigned exceeds total amount";warn.style.display="block";}
+  else{warn.style.display="none";}
 }
 
 function getCustomSplits() {
-  const amount  = parseFloat(document.getElementById("exp-amount").value) || 0;
-  const checked = [...document.querySelectorAll("#exp-split .check-item.checked")].map(el=>el.dataset.id);
-  const result  = {};
-  let assigned  = 0;
-  const unset   = [];
-  checked.forEach(id => {
-    const inp = document.getElementById("custom-split-"+id);
-    const val = inp ? parseFloat(inp.value) : NaN;
-    if (!isNaN(val) && val > 0) { result[id] = val; assigned += val; }
-    else unset.push(id);
+  const amount=parseFloat(document.getElementById("exp-amount").value)||0;
+  const checked=[...document.querySelectorAll("#exp-split .check-item.checked")].map(el=>el.dataset.id);
+  const result={};let assigned=0;const unset=[];
+  checked.forEach(id=>{
+    const inp=document.getElementById("custom-split-"+id);
+    const val=inp?parseFloat(inp.value):NaN;
+    if(!isNaN(val)&&val>0){result[id]=val;assigned+=val;}else unset.push(id);
   });
-  const remainder = Math.max(0, amount - assigned);
-  if (unset.length > 0) { const share = remainder / unset.length; unset.forEach(id => { result[id] = share; }); }
+  const remainder=Math.max(0,amount-assigned);
+  if(unset.length>0){const share=remainder/unset.length;unset.forEach(id=>{result[id]=share;});}
   return result;
 }
 
-function selectAllSplit() {
-  document.querySelectorAll("#exp-split .check-item").forEach(el=>{el.classList.add("checked");el.querySelector("input").checked=true;});
-  if (splitMode==="custom") renderCustomSplit();
-}
-function clearSplit() {
-  document.querySelectorAll("#exp-split .check-item").forEach(el=>{el.classList.remove("checked");el.querySelector("input").checked=false;});
-  if (splitMode==="custom") renderCustomSplit();
+function selectAllSplit(){document.querySelectorAll("#exp-split .check-item").forEach(el=>{el.classList.add("checked");el.querySelector("input").checked=true;});if(splitMode==="custom")renderCustomSplit();}
+function clearSplit(){document.querySelectorAll("#exp-split .check-item").forEach(el=>{el.classList.remove("checked");el.querySelector("input").checked=false;});if(splitMode==="custom")renderCustomSplit();}
+
+// ── PAYMENTS ─────────────────────────────────────────────
+function populatePaymentSelects() {
+  const opts=state.members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
+  document.getElementById("pay-from").innerHTML=opts;
+  document.getElementById("pay-to").innerHTML=opts;
+  document.getElementById("pay-ccy-label").textContent=state.currency;
+  if(state.members.length>1) document.getElementById("pay-to").selectedIndex=1;
 }
 
-// ── RECEIPT SCAN ─────────────────────────────────────────
-async function scanReceipt(input) {
-  const file = input.files[0];
-  if (!file) return;
-  input.value = "";
-  document.getElementById("receipt-scanning").style.display = "block";
+async function recordPayment() {
+  const fromId=document.getElementById("pay-from").value;
+  const toId=document.getElementById("pay-to").value;
+  const amount=parseFloat(v("pay-amount"));
+  const note=v("pay-note").trim();
+  if(fromId===toId) return toast("Payer and recipient must be different");
+  if(!amount||amount<=0) return toast("Enter a valid amount");
+  const fromName=state.members.find(m=>m.memberId===fromId)?.name;
+  const toName=state.members.find(m=>m.memberId===toId)?.name;
+  showLoading("Recording…");
   try {
-    const base64 = await new Promise((res, rej) => {
-      const r = new FileReader();
-      r.onload = () => res(r.result.split(",")[1]);
-      r.onerror = rej;
-      r.readAsDataURL(file);
-    });
-    const response = await fetch("/api/scan-receipt", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 300,
-        messages: [{
-          role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: file.type, data: base64 } },
-            { type: "text", text: `You are an expense tracker assistant. Analyse this receipt and return ONLY a valid JSON object, no explanation, no markdown.
-
-{
-  "itemName": "Vendor, Sub-category, DD Mon YYYY",
-  "amount": 123.45,
-  "currency": "HKD",
-  "category": "Meals",
-  "notes": "key items summary"
+    await api("addPayment",{projectId:state.projectId,fromId,fromName,toId,toName,amount,currency:state.currency,note});
+    const payRes=await api("getPayments",{projectId:state.projectId});
+    state.payments=payRes.payments||[];
+    document.getElementById("pay-amount").value="";
+    document.getElementById("pay-note").value="";
+    renderPaymentsList();
+    toast(`Payment recorded: ${fromName} → ${toName} ${formatAmt(amount)} ${state.currency}`);
+  } catch(e){toast(e.message);}finally{hideLoading();}
 }
 
-Rules:
-- itemName: 3 parts only — (1) vendor/restaurant name shortened, (2) ONE sub-category word e.g. Dinner, Lunch, Coffee, Drinks, Taxi, Stay, Ticket, Snacks (3) date if visible. Max 40 chars total. Example: "Mott 32, Dinner, 19 Apr"
-- amount: final total after tax/service/discounts
-- currency: 3-letter code. Default HKD if unclear.
-- category: ONE word from — Meals, Drinks, Transport, Accommodation, Entertainment, Shopping, Groceries, Health, Activities, Other
-- notes: summarise key line items in one short line e.g. "2x steak, 1x wine, service 10%". Include headcount if shown. Max 80 chars.` }
-          ]
-        }]
-      })
-    });
-    const data = await response.json();
-    const text = (data.content?.[0]?.text || "").replace(/```json|```/g,"").trim();
-    const parsed = JSON.parse(text);
-    if (parsed.itemName) document.getElementById("exp-name").value = parsed.itemName;
-    if (parsed.amount)   document.getElementById("exp-amount").value = parsed.amount;
-    if (parsed.currency) {
-      const sel = document.getElementById("exp-currency");
-      sel.value = parsed.currency.toUpperCase();
-      onExpCurrencyChange(parsed.currency.toUpperCase());
-    }
-    // Auto-suggest category
-    if (parsed.category) {
-      const catSel = document.getElementById("exp-category");
-      // Check if category already exists (case-insensitive)
-      const existing = state.categories.find(c => c.name.toLowerCase() === parsed.category.toLowerCase());
-      if (existing) {
-        catSel.value = existing.name;
-      } else {
-        // Add it to project and select it
-        try {
-          const res = await api("addCategory", { projectId: state.projectId, name: parsed.category });
-          if (!state.categories.find(c => c.name === res.name)) {
-            state.categories.push({ categoryId: res.categoryId, name: res.name });
-          }
-          catSel.innerHTML = `<option value="">— None —</option>` +
-            state.categories.map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
-          catSel.value = res.name;
-        } catch(e) {}
-      }
-    }
-    if (parsed.notes) document.getElementById("exp-notes").value = parsed.notes;
-    toast("Receipt scanned ✓ — review the details");
-  } catch(e) {
-    toast("Could not read receipt — fill in manually");
-  } finally {
-    document.getElementById("receipt-scanning").style.display = "none";
-  }
+function renderPaymentsList() {
+  const div=document.getElementById("payments-list");
+  if(!state.payments||!state.payments.length){div.innerHTML="";return;}
+  div.innerHTML=`<div style="font-family:var(--mono);font-size:11px;color:#aaa;margin-bottom:8px;margin-top:4px">RECORDED PAYMENTS</div>`+
+    state.payments.map(p=>{
+      const date=new Date(p.createdAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+      return `<div class="payment-row">
+        <div style="flex:1">
+          <span style="font-weight:500">${esc(p.fromName)}</span>
+          <span style="color:#aaa"> → </span>
+          <span style="font-weight:500">${esc(p.toName)}</span>
+          ${p.note?`<span style="color:#aaa;font-size:11px"> · ${esc(p.note)}</span>`:""}
+          <div style="font-family:var(--mono);font-size:10px;color:#bbb">${date}</div>
+        </div>
+        <span style="font-family:var(--mono);font-size:13px;font-weight:500;color:var(--green)">${formatAmt(p.amount)} ${p.currency||state.currency}</span>
+        <button class="btn btn-ghost" style="padding:2px 5px;" onclick="deletePayment('${p.paymentId}')" title="Delete">
+          <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+      </div>`;
+    }).join("");
+}
+
+async function deletePayment(paymentId) {
+  if(!confirm("Delete this payment record?")) return;
+  showLoading("Deleting…");
+  try {
+    await api("deletePayment",{paymentId,projectId:state.projectId});
+    const payRes=await api("getPayments",{projectId:state.projectId});
+    state.payments=payRes.payments||[]; renderPaymentsList(); toast("Deleted");
+  } catch(e){toast(e.message);}finally{hideLoading();}
 }
 
 // ── MEMBERS TAB ───────────────────────────────────────────
 function renderMembersTab() {
-  const { members } = state;
-  const list = document.getElementById("members-list");
-  list.innerHTML = members.length ? members.map(m => `
-    <div class="expense-row">
-      <div class="font-medium text-sm">${esc(m.name)}</div>
-      <span style="font-family:var(--mono);font-size:10px;color:#bbb">${m.memberId}</span>
-    </div>`).join("") : `<div class="text-sm text-gray-400 text-center py-6">No members yet.</div>`;
-  const opts = members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
-  document.getElementById("merge-keep").innerHTML = opts;
-  document.getElementById("merge-from").innerHTML = opts;
-  if (members.length > 1) document.getElementById("merge-from").selectedIndex = 1;
+  const{members}=state;
+  const list=document.getElementById("members-list");
+  list.innerHTML=members.length?members.map(m=>`<div class="expense-row"><div class="font-medium text-sm">${esc(m.name)}</div><span style="font-family:var(--mono);font-size:10px;color:#bbb">${m.memberId}</span></div>`).join(""):`<div class="text-sm text-gray-400 text-center py-6">No members yet.</div>`;
+  const opts=members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
+  document.getElementById("merge-keep").innerHTML=opts;
+  document.getElementById("merge-from").innerHTML=opts;
+  if(members.length>1) document.getElementById("merge-from").selectedIndex=1;
 }
 
 async function doMerge() {
-  const keepMemberId  = document.getElementById("merge-keep").value;
-  const mergeMemberId = document.getElementById("merge-from").value;
-  if (keepMemberId === mergeMemberId) return toast("Select two different members");
-  const keepName  = state.members.find(m=>m.memberId===keepMemberId)?.name;
-  const mergeName = state.members.find(m=>m.memberId===mergeMemberId)?.name;
-  if (!confirm(`Merge "${mergeName}" into "${keepName}"?\n\nAll expenses from "${mergeName}" will move to "${keepName}". Cannot be undone.`)) return;
+  const keepMemberId=document.getElementById("merge-keep").value;
+  const mergeMemberId=document.getElementById("merge-from").value;
+  if(keepMemberId===mergeMemberId) return toast("Select two different members");
+  const keepName=state.members.find(m=>m.memberId===keepMemberId)?.name;
+  const mergeName=state.members.find(m=>m.memberId===mergeMemberId)?.name;
+  if(!confirm(`Merge "${mergeName}" into "${keepName}"?\n\nAll expenses from "${mergeName}" will be moved to "${keepName}". This cannot be undone.`)) return;
   showLoading("Merging…");
   try {
-    await api("mergeMembers", { projectId:state.projectId, keepMemberId, mergeMemberId });
-    const projRes = await api("getProject", { projectId:state.projectId });
-    const expRes  = await api("getExpenses", { projectId:state.projectId });
-    state.members  = projRes.members;
-    state.expenses = expRes.expenses;
-    renderProject(); renderMembersTab();
-    toast(`${mergeName} merged into ${keepName} ✓`);
-  } catch(e) { toast(e.message); } finally { hideLoading(); }
+    await api("mergeMembers",{projectId:state.projectId,keepMemberId,mergeMemberId});
+    const projRes=await api("getProject",{projectId:state.projectId});
+    const expRes=await api("getExpenses",{projectId:state.projectId});
+    state.members=projRes.members; state.expenses=expRes.expenses;
+    renderProject(); renderMembersTab(); toast(`${mergeName} merged into ${keepName} ✓`);
+  } catch(e){toast(e.message);}finally{hideLoading();}
 }
 
 // ── TOTAL TAB ─────────────────────────────────────────────
 function renderTotalsTab() {
-  document.getElementById("totals-ccy-label").textContent = state.currency;
-  const chips = document.getElementById("member-chips");
-  chips.innerHTML =
-    `<button class="member-chip ${state.totalsFilter==='all'?'active':''}" onclick="selectTotalsMember('all',this)">All members</button>` +
+  document.getElementById("totals-ccy-label").textContent=state.currency;
+  const chips=document.getElementById("member-chips");
+  chips.innerHTML=`<button class="member-chip ${state.totalsFilter==='all'?'active':''}" onclick="selectTotalsMember('all',this)">All members</button>`+
     state.members.map(m=>`<button class="member-chip ${state.totalsFilter===m.memberId?'active':''}" onclick="selectTotalsMember('${m.memberId}',this)">${esc(m.name)}</button>`).join("");
-  document.getElementById("card-person").style.display = state.totalsFilter === "all" ? "" : "none";
+  document.getElementById("card-person").style.display=state.totalsFilter==="all"?"":"none";
   renderTotalsCharts(state.totalsFilter);
 }
 
-function selectTotalsMember(memberId, btn) {
-  state.totalsFilter = memberId;
+function selectTotalsMember(memberId,btn) {
+  state.totalsFilter=memberId;
   document.querySelectorAll(".member-chip").forEach(c=>c.classList.remove("active"));
   btn.classList.add("active");
-  document.getElementById("card-person").style.display = memberId === "all" ? "" : "none";
+  document.getElementById("card-person").style.display=memberId==="all"?"":"none";
   renderTotalsCharts(memberId);
 }
 
 function renderTotalsCharts(filterMemberId) {
-  const { byCategory, byPerson, grandTotal, hasMissing } = buildTotals(filterMemberId);
-  const ccy = state.currency;
-  document.getElementById("totals-missing-fx-badge").classList.toggle("hidden", !hasMissing);
-  document.getElementById("totals-grand").textContent = `${formatAmt(grandTotal)} ${ccy}`;
-  drawPie("pie-category", byCategory, "legend-category");
-  if (filterMemberId === "all") drawPie("pie-person", byPerson, "legend-person");
-  const catEntries = Object.entries(byCategory).sort(([,a],[,b]) => b - a);
-  if (!catEntries.length) { document.getElementById("totals-rows").innerHTML=`<div class="text-sm text-gray-400 text-center py-4">No data.</div>`; return; }
-  const expByCat = {};
-  state.expenses.forEach(exp => {
-    const cat   = cleanCat(exp.category);
-    const split = (Array.isArray(exp.splitBetween)?exp.splitBetween:String(exp.splitBetween).split(",")).filter(s=>s);
-    if (filterMemberId && filterMemberId !== "all" && !split.includes(filterMemberId)) return;
-    if (!expByCat[cat]) expByCat[cat] = [];
+  const{byCategory,byPerson,grandTotal,hasMissing}=buildTotals(filterMemberId);
+  const ccy=state.currency;
+  document.getElementById("totals-missing-fx-badge").classList.toggle("hidden",!hasMissing);
+  document.getElementById("totals-grand").textContent=`${formatAmt(grandTotal)} ${ccy}`;
+  drawPie("pie-category",byCategory,"legend-category");
+  if(filterMemberId==="all") drawPie("pie-person",byPerson,"legend-person");
+  const catEntries=Object.entries(byCategory).sort(([,a],[,b])=>b-a);
+  if(!catEntries.length){document.getElementById("totals-rows").innerHTML=`<div class="text-sm text-gray-400 text-center py-4">No data.</div>`;return;}
+  const expByCat={};
+  state.expenses.forEach(exp=>{
+    const cat=cleanCat(exp.category);
+    const split=(Array.isArray(exp.splitBetween)?exp.splitBetween:String(exp.splitBetween).split(",")).filter(s=>s);
+    if(filterMemberId&&filterMemberId!=="all"&&!split.includes(filterMemberId)) return;
+    if(!expByCat[cat]) expByCat[cat]=[];
     expByCat[cat].push(exp);
   });
-  document.getElementById("totals-rows").innerHTML = catEntries.map(([cat,amt],i) => {
-    const pct   = grandTotal > 0 ? (amt/grandTotal*100).toFixed(1) : "0.0";
-    const color = PIE_COLORS[i%PIE_COLORS.length];
-    const items = (expByCat[cat]||[]).sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
-    const itemRows = items.map(exp => {
-      const split = (Array.isArray(exp.splitBetween)?exp.splitBetween:String(exp.splitBetween).split(",")).filter(s=>s);
-      const base  = toBase(exp.amount, exp.currency||state.currency);
-      const share = (filterMemberId && filterMemberId !== "all" && base !== null) ? base/split.length : base;
-      const date  = new Date(exp.createdAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+  document.getElementById("totals-rows").innerHTML=catEntries.map(([cat,amt],i)=>{
+    const pct=grandTotal>0?(amt/grandTotal*100).toFixed(1):"0.0";
+    const color=PIE_COLORS[i%PIE_COLORS.length];
+    const items=(expByCat[cat]||[]).sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
+    const itemRows=items.map(exp=>{
+      const split=(Array.isArray(exp.splitBetween)?exp.splitBetween:String(exp.splitBetween).split(",")).filter(s=>s);
+      const base=toBase(exp.amount,exp.currency||state.currency);
+      const share=(filterMemberId&&filterMemberId!=="all"&&base!==null)?base/split.length:base;
+      const date=new Date(exp.createdAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0 7px 20px;border-bottom:1px dashed var(--rule);font-size:12px;">
         <div><span>${esc(exp.itemName)}</span><span style="color:#aaa;font-size:11px;margin-left:6px">${date} · ${esc(exp.payerName)}</span></div>
         <span style="font-family:var(--mono);font-size:12px;color:#555;white-space:nowrap;margin-left:12px">${share!==null?formatAmt(share):"?"} ${ccy}</span>
@@ -937,20 +848,16 @@ function renderTotalsCharts(filterMemberId) {
   }).join("");
 }
 
-function toggleCatRow(rowId, chevId) {
-  const el=document.getElementById(rowId), chv=document.getElementById(chevId);
-  const open=el.style.display==="none";
-  el.style.display=open?"block":"none"; chv.style.transform=open?"rotate(180deg)":"";
-}
+function toggleCatRow(rowId,chevId){const el=document.getElementById(rowId),chv=document.getElementById(chevId);const open=el.style.display==="none";el.style.display=open?"block":"none";chv.style.transform=open?"rotate(180deg)":"";}
 
-function drawPie(canvasId, dataObj, legendId) {
-  const canvas=document.getElementById(canvasId); if (!canvas) return;
+function drawPie(canvasId,dataObj,legendId){
+  const canvas=document.getElementById(canvasId);if(!canvas)return;
   const ctx=canvas.getContext("2d");
   const W=canvas.width,H=canvas.height,cx=W/2,cy=H/2,r=Math.min(W,H)/2-8;
   ctx.clearRect(0,0,W,H);
   const entries=Object.entries(dataObj).filter(([,v])=>v>0).sort(([,a],[,b])=>b-a);
   const total=entries.reduce((s,[,v])=>s+v,0);
-  if (!entries.length||total===0){ctx.fillStyle="#e8e4dc";ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();document.getElementById(legendId).innerHTML="";return;}
+  if(!entries.length||total===0){ctx.fillStyle="#e8e4dc";ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();document.getElementById(legendId).innerHTML="";return;}
   let angle=-Math.PI/2;
   entries.forEach(([,val],i)=>{
     const slice=(val/total)*Math.PI*2;
@@ -972,28 +879,29 @@ function drawPie(canvasId, dataObj, legendId) {
 async function renderBalancesAndSettle() {
   showLoading("Calculating…");
   try {
-    const res = await api("getSettlement",{projectId:state.projectId});
+    const res=await api("getSettlement",{projectId:state.projectId});
     renderBalances(res.balances,res.baseCcy,res.missingFx);
     renderSettle(res.transactions,res.baseCcy,res.missingFx);
+    populatePaymentSelects();
+    renderPaymentsList();
   } catch(e){toast(e.message);}finally{hideLoading();}
 }
 
-function renderBalances(balances,baseCcy,missingFx) {
+function renderBalances(balances,baseCcy,missingFx){
   const list=document.getElementById("balance-list");
-  if (!balances||!balances.length){list.innerHTML=`<div class="text-sm text-gray-400 text-center py-8">No data yet.</div>`;return;}
-  if (missingFx&&missingFx.length) toast("⚠️ Missing FX: "+missingFx.join(", "));
+  if(!balances||!balances.length){list.innerHTML=`<div class="text-sm text-gray-400 text-center py-8">No data yet.</div>`;return;}
+  if(missingFx&&missingFx.length) toast("⚠️ Missing FX: "+missingFx.join(", "));
   list.innerHTML=[...balances].sort((a,b)=>b.net-a.net).map(b=>{
     const cls=b.net>0?"pill-positive":b.net<0?"pill-negative":"pill-currency";
-    return `<div class="expense-row"><div class="font-medium text-sm">${esc(b.name)}</div>
-      <span class="pill ${cls} text-sm">${b.net>0?"+":""}${formatAmt(b.net)} ${baseCcy||state.currency}</span></div>`;
+    return `<div class="expense-row"><div class="font-medium text-sm">${esc(b.name)}</div><span class="pill ${cls} text-sm">${b.net>0?"+":""}${formatAmt(b.net)} ${baseCcy||state.currency}</span></div>`;
   }).join("");
 }
 
-function renderSettle(transactions,baseCcy,missingFx) {
+function renderSettle(transactions,baseCcy,missingFx){
   document.getElementById("settle-missing-list").textContent=missingFx&&missingFx.length?"No rate set for: "+missingFx.join(", "):"";
   document.getElementById("settle-missing-fx").classList.toggle("hidden",!missingFx||!missingFx.length);
   const ccy=baseCcy||state.currency,list=document.getElementById("settle-list");
-  if (!transactions||!transactions.length){list.innerHTML=`<div class="text-center py-8"><div style="font-size:2rem;margin-bottom:8px">🎉</div><div class="text-sm text-gray-400">Everyone's even!</div></div>`;return;}
+  if(!transactions||!transactions.length){list.innerHTML=`<div class="text-center py-8"><div style="font-size:2rem;margin-bottom:8px">🎉</div><div class="text-sm text-gray-400">Everyone's even!</div></div>`;return;}
   list.innerHTML=transactions.map(t=>`
     <div class="settle-row">
       <div class="font-medium text-sm flex-1">${esc(t.from)}</div>
@@ -1004,9 +912,9 @@ function renderSettle(transactions,baseCcy,missingFx) {
 }
 
 // ── FX ────────────────────────────────────────────────────
-function onExpCurrencyChange(ccy) {
+function onExpCurrencyChange(ccy){
   const row=document.getElementById("fx-rate-row"),base=state.currency;
-  if (ccy===base){row.classList.add("hidden");return;}
+  if(ccy===base){row.classList.add("hidden");return;}
   row.classList.remove("hidden");
   document.getElementById("fx-rate-label").textContent=`FX Rate (1 ${ccy} = ? ${base})`;
   document.getElementById("fx-rate-hint").textContent=`→ ${base}`;
@@ -1014,39 +922,51 @@ function onExpCurrencyChange(ccy) {
   document.getElementById("exp-fx-rate").value=ex||"";
   document.getElementById("fx-rate-saved").textContent=ex?"Using saved rate: "+ex:"No rate saved yet";
 }
-function updateFxInputLabel(){
-  document.getElementById("fx-input-label").textContent=`Rate (1 ${document.getElementById("fx-ccy-input").value} = ? ${state.currency})`;
-}
+
+function updateFxInputLabel(){document.getElementById("fx-input-label").textContent=`Rate (1 ${document.getElementById("fx-ccy-input").value} = ? ${state.currency})`;}
+
 async function saveFxRate(){
   const ccy=document.getElementById("fx-ccy-input").value,rate=parseFloat(document.getElementById("fx-rate-input").value);
-  if (!rate||rate<=0) return toast("Enter a valid rate");
-  if (ccy===state.currency) return toast("That's already the base currency");
+  if(!rate||rate<=0) return toast("Enter a valid rate");
+  if(ccy===state.currency) return toast("That's already the base currency");
   showLoading("Saving rate…");
   try{await api("setFxRate",{projectId:state.projectId,currency:ccy,rate});state.fxRates[ccy]=rate;renderFxTab();toast(`Saved: 1 ${ccy} = ${rate} ${state.currency}`);}
   catch(e){toast(e.message);}finally{hideLoading();}
 }
-async function maybeSaveFxFromExpense(ccy,rateStr){
-  const rate=parseFloat(rateStr);
-  if (!rate||!ccy||ccy===state.currency) return;
-  try{await api("setFxRate",{projectId:state.projectId,currency:ccy,rate});state.fxRates[ccy]=rate;}catch(e){}
-}
+
+async function maybeSaveFxFromExpense(ccy,rateStr){const rate=parseFloat(rateStr);if(!rate||!ccy||ccy===state.currency)return;try{await api("setFxRate",{projectId:state.projectId,currency:ccy,rate});state.fxRates[ccy]=rate;}catch(e){}}
+
 function renderFxTab(){
   document.getElementById("fx-base-label").textContent=state.currency;
   updateFxInputLabel();
   const entries=Object.entries(state.fxRates);
   document.getElementById("fx-rates-list").innerHTML=entries.length?entries.map(([ccy,rate])=>`
     <div class="expense-row">
-      <div><span class="font-medium text-sm">1 ${esc(ccy)}</span><span class="text-sm text-gray-400"> = ${rate} ${esc(state.currency)}</span></div>
+      <div>
+        <span class="font-medium text-sm">1 ${esc(ccy)}</span>
+        <span class="text-sm text-gray-400"> = </span>
+        <input type="number" value="${rate}" min="0" step="0.0001"
+          style="width:90px;display:inline-block;padding:4px 8px;font-family:var(--mono);font-size:13px"
+          onchange="updateFxRate('${ccy}',this.value)">
+        <span class="text-sm text-gray-400"> ${esc(state.currency)}</span>
+      </div>
       <span class="pill pill-currency">${esc(ccy)}</span>
     </div>`).join(""):`<div class="text-sm text-gray-400 text-center py-6">No FX rates set yet.</div>`;
 }
 
+async function updateFxRate(ccy,val){
+  const rate=parseFloat(val);
+  if(!rate||rate<=0){renderFxTab();return toast("Invalid rate");}
+  try{await api("setFxRate",{projectId:state.projectId,currency:ccy,rate});state.fxRates[ccy]=rate;toast(`Updated: 1 ${ccy} = ${rate} ${state.currency}`);}
+  catch(e){toast(e.message);}
+}
+
 // ── CATEGORIES ───────────────────────────────────────────
 async function openAddCategory(){
-  const name=prompt("New category name:");if (!name||!name.trim()) return;
+  const name=prompt("New category name:");if(!name||!name.trim())return;
   try{
     const res=await api("addCategory",{projectId:state.projectId,name:name.trim()});
-    if (!res.existing) state.categories.push({categoryId:res.categoryId,name:res.name});
+    if(!res.existing) state.categories.push({categoryId:res.categoryId,name:res.name});
     const sel=document.getElementById("exp-category");
     sel.innerHTML=`<option value="">— None —</option>`+state.categories.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
     sel.value=res.name;toast("Category: "+res.name);
@@ -1061,44 +981,61 @@ function switchTab(name,btn){
   });
   document.getElementById("tab-"+name).classList.remove("hidden");
   btn.classList.add("active");
-  if (name==="totals")  renderTotalsTab();
-  if (name==="balances"||name==="settle") renderBalancesAndSettle();
-  if (name==="members") renderMembersTab();
-  if (name==="fx")      renderFxTab();
+  if(name==="totals") renderTotalsTab();
+  if(name==="balances"||name==="settle") renderBalancesAndSettle();
+  if(name==="members") renderMembersTab();
+  if(name==="fx") renderFxTab();
 }
 
 // ── DIRECTORY ────────────────────────────────────────────
 async function showDirectory(){
-  const code = prompt("Enter access code:");
-  if (code !== "sfg") return toast("Incorrect code");
+  const code=prompt("Enter access code:");
+  if(code!=="sfg") return toast("Incorrect code");
   hide("view-landing");show("view-directory");showLoading("Loading projects…");
   try{
     const res=await api("getAllProjects");
+    allProjectsCache=res.projects||[];
+    const active=res.projects.filter(p=>!p.archived);
+    const archived=res.projects.filter(p=>p.archived);
     const list=document.getElementById("directory-list");
-    if (!res.projects||!res.projects.length){list.innerHTML=`<div class="text-sm text-gray-400 text-center py-8">No projects yet.</div>`;return;}
-    list.innerHTML=res.projects.map(p=>`
-      <div style="border-bottom:1px solid var(--rule);padding:0">
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;cursor:pointer;user-select:none" onclick="toggleDir('db-${p.projectId}','dc-${p.projectId}')">
-          <div>
-            <div class="font-medium text-sm">${esc(p.name)}</div>
-            <div style="font-family:var(--mono);font-size:11px;color:#aaa">${esc(p.projectId)} · ${p.members.length} member${p.members.length!==1?"s":""} · ${esc(p.defaultCurrency)}</div>
-          </div>
-          <span id="dc-${p.projectId}" style="color:#aaa;font-size:11px;transition:transform .2s;display:inline-block;flex-shrink:0;margin-left:8px">▼</span>
-        </div>
-        <div id="db-${p.projectId}" style="display:none;padding-bottom:12px">
-          <div class="check-grid">
-            ${p.members.map(m=>`<label class="check-item" data-project="${esc(p.projectId)}" data-member="${esc(m.memberId)}" data-name="${esc(m.name)}" onclick="selectDirectoryMember(this)">${esc(m.name)}</label>`).join("")}
-            <label class="check-item" style="font-style:italic;color:#aaa" onclick="newMemberJoin('${esc(p.projectId)}','${esc(p.name)}')">+ New member</label>
-          </div>
-        </div>
-      </div>`).join("");
+    list.innerHTML=active.length?active.map(p=>dirProjectHTML(p)).join(""):`<div class="text-sm text-gray-400 text-center py-8">No active projects.</div>`;
+    const arcSec=document.getElementById("dir-archived-section");
+    const arcList=document.getElementById("directory-archived");
+    if(archived.length){arcSec.style.display="block";arcList.innerHTML=archived.map(p=>dirProjectHTML(p,true)).join("");}
+    else{arcSec.style.display="none";}
   }catch(e){toast(e.message);}finally{hideLoading();}
 }
-function toggleDir(bodyId,chevId){
-  const body=document.getElementById(bodyId),chv=document.getElementById(chevId);
-  const open=body.style.display!=="none";
-  body.style.display=open?"none":"block";chv.style.transform=open?"":"rotate(180deg)";
+
+function dirProjectHTML(p,isArchived=false){
+  return `<div style="border-bottom:1px solid var(--rule);padding:0">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;cursor:pointer;user-select:none" onclick="toggleDir('db-${p.projectId}','dc-${p.projectId}')">
+      <div>
+        <div class="font-medium text-sm">${esc(p.name)}${isArchived?` <span class="pill" style="background:var(--cream);color:#999;font-size:10px">archived</span>`:""}</div>
+        <div style="font-family:var(--mono);font-size:11px;color:#aaa">${esc(p.projectId)} · ${p.members.length} member${p.members.length!==1?"s":""} · ${esc(p.defaultCurrency)}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();toggleArchive('${p.projectId}',${isArchived})">${isArchived?"Unarchive":"Archive"}</button>
+        <span id="dc-${p.projectId}" style="color:#aaa;font-size:11px;transition:transform .2s;display:inline-block">▼</span>
+      </div>
+    </div>
+    <div id="db-${p.projectId}" style="display:none;padding-bottom:12px">
+      <div class="check-grid">
+        ${p.members.map(m=>`<label class="check-item" data-project="${esc(p.projectId)}" data-member="${esc(m.memberId)}" data-name="${esc(m.name)}" onclick="selectDirectoryMember(this)">${esc(m.name)}</label>`).join("")}
+        <label class="check-item" style="font-style:italic;color:#aaa" onclick="newMemberJoin('${esc(p.projectId)}','${esc(p.name)}')">+ New member</label>
+      </div>
+    </div>
+  </div>`;
 }
+
+async function toggleArchive(projectId,currentlyArchived){
+  showLoading(currentlyArchived?"Unarchiving…":"Archiving…");
+  try{
+    await api("archiveProject",{projectId,archived:currentlyArchived?"false":"true"});
+    await showDirectory();
+  }catch(e){toast(e.message);}finally{hideLoading();}
+}
+
+function toggleDir(bodyId,chevId){const body=document.getElementById(bodyId),chv=document.getElementById(chevId);const open=body.style.display!=="none";body.style.display=open?"none":"block";chv.style.transform=open?"":"rotate(180deg)";}
 function hideDirectory(){hide("view-directory");show("view-landing");}
 async function selectDirectoryMember(el){
   const projectId=el.dataset.project,name=el.dataset.name,memberId=el.dataset.member;
@@ -1115,44 +1052,29 @@ function newMemberJoin(projectId,projectName){
 }
 
 // ── AUTOCOMPLETE ──────────────────────────────────────────
-async function loadAllProjectsCache(){
-  try{const res=await api("getAllProjects");allProjectsCache=res.projects||[];}catch(e){}
-}
+async function loadAllProjectsCache(){try{const res=await api("getAllProjects");allProjectsCache=res.projects||[];}catch(e){}}
 function acProject(val){
   const dd=document.getElementById("ac-projects");
-  if (!val||val.length<2){dd.style.display="none";return;}
-  const matches=allProjectsCache.filter(p=>
-    p.projectId.toLowerCase().includes(val.toLowerCase())||
-    p.name.toLowerCase().includes(val.toLowerCase())
-  ).slice(0,6);
-  if (!matches.length){dd.style.display="none";return;}
+  if(!val||val.length<2){dd.style.display="none";return;}
+  const matches=allProjectsCache.filter(p=>!p.archived&&(p.projectId.toLowerCase().includes(val.toLowerCase())||p.name.toLowerCase().includes(val.toLowerCase()))).slice(0,6);
+  if(!matches.length){dd.style.display="none";return;}
   dd.innerHTML=matches.map(p=>{
     const hi=s=>s.replace(new RegExp(`(${val.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`,"gi"),"<strong style='color:var(--accent)'>$1</strong>");
-    return `<div style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--rule)" onmousedown="pickProject('${p.projectId}')" onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background=''">${hi(esc(p.name))} <span style="color:#aaa;font-size:11px;font-family:var(--mono)">${hi(p.projectId)}</span></div>`;
+    return `<div style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--rule)" onmousedown="pickProject('${p.projectId}')" onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background=''">${hi(p.name)} <span style="color:#aaa;font-size:11px;font-family:var(--mono)">${hi(p.projectId)}</span></div>`;
   }).join("");
   dd.style.display="block";
 }
-function pickProject(projectId){
-  document.getElementById("join-id").value=projectId;
-  hideAc("ac-projects");
-  const proj=allProjectsCache.find(p=>p.projectId===projectId);
-  if (proj&&proj.members.length) showNameSuggestions(proj.members);
-}
-function showNameSuggestions(members){
-  const dd=document.getElementById("ac-names");
-  dd.innerHTML=members.map(m=>`<div style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--rule)" onmousedown="pickName('${m.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')  " onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background=''">${esc(m.name)}</div>`).join("");
-  dd.style.display="block";
-  document.getElementById("join-name").focus();
-}
+function pickProject(projectId){document.getElementById("join-id").value=projectId;hideAc("ac-projects");const proj=allProjectsCache.find(p=>p.projectId===projectId);if(proj&&proj.members.length)showNameSuggestions(proj.members);}
+function showNameSuggestions(members){const dd=document.getElementById("ac-names");dd.innerHTML=members.map(m=>`<div style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--rule)" onmousedown="pickName('${m.name.replace(/'/g,"\\'")}') " onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background=''">${esc(m.name)}</div>`).join("");dd.style.display="block";document.getElementById("join-name").focus();}
 function acName(val){
   const dd=document.getElementById("ac-names");
   const projectId=document.getElementById("join-id").value.trim();
   const proj=allProjectsCache.find(p=>p.projectId.toLowerCase()===projectId.toLowerCase());
-  if (!proj){dd.style.display="none";return;}
+  if(!proj){dd.style.display="none";return;}
   const matches=proj.members.filter(m=>m.name.toLowerCase().includes(val.toLowerCase())).slice(0,6);
-  if (!matches.length){dd.style.display="none";return;}
+  if(!matches.length){dd.style.display="none";return;}
   const hi=s=>s.replace(new RegExp(`(${val.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`,"gi"),"<strong style='color:var(--accent)'>$1</strong>");
-  dd.innerHTML=matches.map(m=>`<div style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--rule)" onmousedown="pickName('${m.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')  " onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background=''">${hi(esc(m.name))}</div>`).join("");
+  dd.innerHTML=matches.map(m=>`<div style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--rule)" onmousedown="pickName('${m.name.replace(/'/g,"\\'")}') " onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background=''">${hi(esc(m.name))}</div>`).join("");
   dd.style.display="block";
 }
 function pickName(name){document.getElementById("join-name").value=name;hideAc("ac-names");}
@@ -1172,19 +1094,9 @@ function toast(msg){const el=document.getElementById("toast");el.textContent=msg
 function formatAmt(n){return(parseFloat(n)||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});}
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 function updateURL(projectId){const u=new URL(location.href);u.searchParams.set("p",projectId);history.replaceState({},"",u.toString());}
-function copyShareLink(){
-  const u=new URL(location.href);u.searchParams.set("p",state.projectId);
-  navigator.clipboard.writeText(u.toString()).then(()=>toast("Link copied!")).catch(()=>toast("Copy URL manually"));
-}
-function goHome(){
-  hide("view-project");show("view-landing");history.replaceState({},"",location.pathname);
-  state={projectId:null,project:null,members:[],expenses:[],fxRates:{},categories:[],me:null,currency:"USD",totalsFilter:"all"};
-  editingExpenseId=null; splitMode="equal";
-}
-function saveLocalMe(projectId,memberId,name){
-  try{localStorage.setItem("ss_me_"+projectId,JSON.stringify({memberId,name}));}catch{}
-  state.me={memberId,name};
-}
+function copyShareLink(){const u=new URL(location.href);u.searchParams.set("p",state.projectId);navigator.clipboard.writeText(u.toString()).then(()=>toast("Link copied!")).catch(()=>toast("Copy URL manually"));}
+function goHome(){hide("view-project");show("view-landing");history.replaceState({},"",location.pathname);state={projectId:null,project:null,members:[],expenses:[],fxRates:{},categories:[],me:null,currency:"USD",totalsFilter:"all",payments:[]};editingExpenseId=null;splitMode="equal";}
+function saveLocalMe(projectId,memberId,name){try{localStorage.setItem("ss_me_"+projectId,JSON.stringify({memberId,name}));}catch{}state.me={memberId,name};}
 function loadLocalMe(projectId){try{return JSON.parse(localStorage.getItem("ss_me_"+projectId));}catch{return null;}}
 </script>
 </body>
