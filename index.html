@@ -774,7 +774,22 @@ async function scanReceipt(input) {
           role: "user",
           content: [
             { type: "image", source: { type: "base64", media_type: file.type, data: base64 } },
-            { type: "text", text: 'Extract from this receipt. Return ONLY a JSON object, no explanation:\n{"itemName":"short description","amount":123.45,"currency":"HKD"}\nUse the currency shown. Amount = total.' }
+            { type: "text", text: `You are an expense tracker assistant. Analyse this receipt image and extract the following. Return ONLY a valid JSON object, no explanation, no markdown.
+
+{
+  "itemName": "Vendor Name, Sub-category, DD Mon YYYY",
+  "amount": 123.45,
+  "currency": "HKD",
+  "category": "Meals",
+  "notes": "optional short note e.g. 8 people, alcohol included"
+}
+
+Rules:
+- itemName: combine vendor name + sub-category (e.g. Dinner, Lunch, Drinks, Snacks, Coffee, Taxi, Hotel, Ticket) + receipt date if visible. Example: "Mott 32, Dinner, 19 Apr 2025"
+- amount: the final total payable amount (after tax, service charge, discounts)
+- currency: 3-letter code from the receipt. Default HKD if ambiguous.
+- category: ONE broad category from this list only — Meals, Drinks, Transport, Accommodation, Entertainment, Shopping, Groceries, Health, Activities, Other
+- notes: any useful detail (number of people if shown, special items, tip amount). Leave empty string if nothing notable.` }
           ]
         }]
       })
@@ -789,7 +804,29 @@ async function scanReceipt(input) {
       sel.value = parsed.currency.toUpperCase();
       onExpCurrencyChange(parsed.currency.toUpperCase());
     }
-    toast("Receipt scanned ✓ — review the details");
+    // Auto-suggest category
+    if (parsed.category) {
+      const catSel = document.getElementById("exp-category");
+      // Check if category already exists (case-insensitive)
+      const existing = state.categories.find(c => c.name.toLowerCase() === parsed.category.toLowerCase());
+      if (existing) {
+        catSel.value = existing.name;
+      } else {
+        // Add it to project and select it
+        try {
+          const res = await api("addCategory", { projectId: state.projectId, name: parsed.category });
+          if (!state.categories.find(c => c.name === res.name)) {
+            state.categories.push({ categoryId: res.categoryId, name: res.name });
+          }
+          catSel.innerHTML = `<option value="">— None —</option>` +
+            state.categories.map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
+          catSel.value = res.name;
+        } catch(e) {}
+      }
+    }
+    // Show notes as toast if present
+    if (parsed.notes) toast(`📋 ${parsed.notes}`);
+    else toast("Receipt scanned ✓ — review the details");
   } catch(e) {
     toast("Could not read receipt — fill in manually");
   } finally {
