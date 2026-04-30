@@ -187,7 +187,10 @@
   <div id="tab-expenses" class="px-4 pb-20" style="max-width:720px;margin:0 auto;">
     <div class="flex items-center justify-between py-4">
       <div style="font-family:var(--mono);font-size:11px;color:#aaa" id="exp-count"></div>
-      <button class="btn btn-primary" onclick="openAddExpense()"><span style="font-size:16px;line-height:1">+</span> Add expense</button>
+      <div class="flex gap-2">
+        <button class="btn btn-secondary" onclick="openAddPaymentModal()">+ Payment</button>
+        <button class="btn btn-primary" onclick="openAddExpense()"><span style="font-size:16px;line-height:1">+</span> Add expense</button>
+      </div>
     </div>
     <div id="expense-list" class="card"><div class="text-sm text-gray-400 text-center py-8">No expenses yet.</div></div>
   </div>
@@ -312,7 +315,17 @@
 <!-- ADD / EDIT EXPENSE MODAL -->
 <div id="modal-expense" class="modal-bg hidden" onclick="closeIfBg(event,'modal-expense')">
   <div class="modal">
-    <h2 id="exp-modal-title" style="font-family:var(--serif);font-size:1.5rem;margin-bottom:20px">New expense</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h2 id="exp-modal-title" style="font-family:var(--serif);font-size:1.5rem">New expense</h2>
+      <label style="text-transform:none;letter-spacing:0;font-size:12px;color:var(--accent);cursor:pointer;margin:0;display:flex;align-items:center;gap:4px;border:1.5px solid var(--accent);padding:5px 10px;border-radius:4px;white-space:nowrap" for="receipt-upload">
+        📷 Scan receipt
+      </label>
+      <input type="file" id="receipt-upload" accept="image/*" style="display:none" onchange="scanReceipt(this)">
+    </div>
+    <div id="receipt-scanning" style="display:none;text-align:center;padding:12px;background:var(--cream);border-radius:6px;font-size:13px;color:#888;margin-bottom:12px">
+      <div style="display:inline-block;width:14px;height:14px;border:2px solid #ccc;border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:middle"></div>
+      Reading receipt with AI…
+    </div>
     <div class="grid gap-4">
       <div><label>Item name</label><input id="exp-name" type="text" placeholder="Vendor, sub-category, date…"></div>
       <div><label>Notes <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#bbb;font-size:11px">(optional)</span></label><input id="exp-notes" type="text" placeholder="e.g. 2x steak, 1x wine, 8 pax"></div>
@@ -359,6 +372,28 @@
       <div class="flex gap-3 pt-2">
         <button class="btn btn-secondary flex-1" onclick="closeModal('modal-expense')">Cancel</button>
         <button id="save-exp-btn" class="btn btn-primary flex-1" onclick="saveExpense()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PAYMENT MODAL -->
+<div id="modal-payment" class="modal-bg hidden" onclick="closeIfBg(event,'modal-payment')">
+  <div class="modal" style="max-width:400px">
+    <h2 style="font-family:var(--serif);font-size:1.5rem;margin-bottom:20px">Record a payment</h2>
+    <div style="font-size:12px;color:#888;margin-bottom:16px">Record when someone has already paid another person outside the app.</div>
+    <div class="grid gap-4">
+      <div class="grid grid-cols-2 gap-3">
+        <div><label>From (payer)</label><select id="pay-from-modal"></select></div>
+        <div><label>To (recipient)</label><select id="pay-to-modal"></select></div>
+      </div>
+      <div><label>Amount (<span id="pay-ccy-modal"></span>)</label>
+        <input id="pay-amount-modal" type="number" min="0" step="0.01" placeholder="0.00"></div>
+      <div><label>Note (optional)</label>
+        <input id="pay-note-modal" type="text" placeholder="e.g. Bank transfer 19 Apr"></div>
+      <div class="flex gap-3 pt-2">
+        <button class="btn btn-secondary flex-1" onclick="closeModal('modal-payment')">Cancel</button>
+        <button class="btn btn-primary flex-1" onclick="savePaymentModal()">Record</button>
       </div>
     </div>
   </div>
@@ -1079,6 +1114,106 @@ function acName(val){
 }
 function pickName(name){document.getElementById("join-name").value=name;hideAc("ac-names");}
 function hideAc(id){document.getElementById(id).style.display="none";}
+
+// ── RECEIPT SCAN ─────────────────────────────────────────
+async function scanReceipt(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = "";
+  document.getElementById("receipt-scanning").style.display = "block";
+  try {
+    const base64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result.split(",")[1]);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+    const response = await fetch("/api/scan-receipt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 400,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: file.type, data: base64 } },
+            { type: "text", text: `You are an expense tracker assistant. Analyse this receipt and return ONLY a valid JSON object, no explanation, no markdown.
+
+{
+  "itemName": "Vendor, Sub-category, DD Mon YYYY",
+  "amount": 123.45,
+  "currency": "HKD",
+  "category": "Meals",
+  "notes": "key items summary"
+}
+
+Rules:
+- itemName: 3 parts — (1) vendor name shortened, (2) ONE sub-category word e.g. Dinner, Lunch, Coffee, Drinks, Taxi, Stay, Ticket, Snacks, (3) date if visible. Max 40 chars. Example: "Mott 32, Dinner, 19 Apr"
+- amount: final total after tax/service/discounts
+- currency: 3-letter code. Default HKD if unclear.
+- category: ONE word from — Meals, Drinks, Transport, Accommodation, Entertainment, Shopping, Groceries, Health, Activities, Other
+- notes: key line items in one short line e.g. "2x steak, 1x wine, service 10%". Max 80 chars.` }
+          ]
+        }]
+      })
+    });
+    const data = await response.json();
+    const text = (data.content?.[0]?.text || "").replace(/```json|```/g,"").trim();
+    const parsed = JSON.parse(text);
+    if (parsed.itemName) document.getElementById("exp-name").value = parsed.itemName;
+    if (parsed.amount)   document.getElementById("exp-amount").value = parsed.amount;
+    if (parsed.currency) { const sel=document.getElementById("exp-currency"); sel.value=parsed.currency.toUpperCase(); onExpCurrencyChange(parsed.currency.toUpperCase()); }
+    if (parsed.notes)    document.getElementById("exp-notes").value = parsed.notes;
+    if (parsed.category) {
+      const catSel=document.getElementById("exp-category");
+      const existing=state.categories.find(c=>c.name.toLowerCase()===parsed.category.toLowerCase());
+      if (existing) { catSel.value=existing.name; }
+      else {
+        try {
+          const res=await api("addCategory",{projectId:state.projectId,name:parsed.category});
+          if (!state.categories.find(c=>c.name===res.name)) state.categories.push({categoryId:res.categoryId,name:res.name});
+          catSel.innerHTML=`<option value="">— None —</option>`+state.categories.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
+          catSel.value=res.name;
+        } catch(e){}
+      }
+    }
+    toast("Receipt scanned ✓ — review the details");
+  } catch(e) { toast("Could not read receipt — fill in manually"); }
+  finally { document.getElementById("receipt-scanning").style.display="none"; }
+}
+
+// ── PAYMENT MODAL ─────────────────────────────────────────
+function openAddPaymentModal() {
+  if (!state.members.length) return toast("No members yet");
+  const opts = state.members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
+  document.getElementById("pay-from-modal").innerHTML = opts;
+  document.getElementById("pay-to-modal").innerHTML   = opts;
+  document.getElementById("pay-ccy-modal").textContent = state.currency;
+  document.getElementById("pay-amount-modal").value = "";
+  document.getElementById("pay-note-modal").value   = "";
+  if (state.members.length > 1) document.getElementById("pay-to-modal").selectedIndex = 1;
+  showModal("modal-payment");
+}
+
+async function savePaymentModal() {
+  const fromId   = document.getElementById("pay-from-modal").value;
+  const toId     = document.getElementById("pay-to-modal").value;
+  const amount   = parseFloat(document.getElementById("pay-amount-modal").value);
+  const note     = document.getElementById("pay-note-modal").value.trim();
+  if (fromId === toId) return toast("Payer and recipient must be different");
+  if (!amount || amount <= 0) return toast("Enter a valid amount");
+  const fromName = state.members.find(m=>m.memberId===fromId)?.name;
+  const toName   = state.members.find(m=>m.memberId===toId)?.name;
+  showLoading("Recording…");
+  try {
+    await api("addPayment",{projectId:state.projectId,fromId,fromName,toId,toName,amount,currency:state.currency,note});
+    const payRes = await api("getPayments",{projectId:state.projectId});
+    state.payments = payRes.payments || [];
+    closeModal("modal-payment");
+    toast(`${fromName} → ${toName}: ${formatAmt(amount)} ${state.currency} recorded ✓`);
+  } catch(e) { toast(e.message); } finally { hideLoading(); }
+}
 
 // ── CORE UTILS ───────────────────────────────────────────
 function v(id){return document.getElementById(id).value;}
