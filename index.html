@@ -188,6 +188,7 @@
     <div class="flex items-center justify-between py-4">
       <div style="font-family:var(--mono);font-size:11px;color:#aaa" id="exp-count"></div>
       <div class="flex gap-2">
+        <button class="btn btn-secondary" onclick="openImportStatement()">📄 Import</button>
         <button class="btn btn-secondary" onclick="openAddPaymentModal()">+ Payment</button>
         <button class="btn btn-primary" onclick="openAddExpense()"><span style="font-size:16px;line-height:1">+</span> Add expense</button>
       </div>
@@ -372,6 +373,49 @@
       <div class="flex gap-3 pt-2">
         <button class="btn btn-secondary flex-1" onclick="closeModal('modal-expense')">Cancel</button>
         <button id="save-exp-btn" class="btn btn-primary flex-1" onclick="saveExpense()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT STEP 1: PICK PAYER + UPLOAD -->
+<div id="modal-import-step1" class="modal-bg hidden" onclick="closeIfBg(event,'modal-import-step1')">
+  <div class="modal" style="max-width:400px">
+    <h2 style="font-family:var(--serif);font-size:1.5rem;margin-bottom:8px">Import statement</h2>
+    <div style="font-size:12px;color:#888;margin-bottom:20px">Upload a screenshot of your credit card statement or Apple Pay wallet. Claude will extract all transactions.</div>
+    <div class="grid gap-4">
+      <div><label>Who paid this card?</label><select id="import-payer"></select></div>
+      <div>
+        <label>Statement screenshot</label>
+        <label for="import-upload" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:32px;border:2px dashed var(--rule);border-radius:6px;cursor:pointer;font-size:13px;color:#888;text-transform:none;letter-spacing:0;margin:0;transition:all .15s" id="import-upload-label">
+          <span style="font-size:24px">📷</span>
+          <div><div style="font-weight:500;color:var(--ink)">Tap to upload screenshot</div><div style="font-size:11px;margin-top:2px">JPG, PNG, HEIC</div></div>
+        </label>
+        <input type="file" id="import-upload" accept="image/*" style="display:none" onchange="runImportScan(this)">
+      </div>
+      <div id="import-scanning" style="display:none;text-align:center;padding:16px;background:var(--cream);border-radius:6px;font-size:13px;color:#888">
+        <div style="display:inline-block;width:14px;height:14px;border:2px solid #ccc;border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:middle"></div>
+        Reading statement with AI…
+      </div>
+      <button class="btn btn-secondary w-full" onclick="closeModal('modal-import-step1')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT STEP 2: REVIEW -->
+<div id="modal-import-review" class="modal-bg hidden" onclick="closeIfBg(event,'modal-import-review')">
+  <div class="modal" style="max-width:640px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <h2 style="font-family:var(--serif);font-size:1.5rem">Review transactions</h2>
+      <button class="btn btn-ghost" onclick="closeModal('modal-import-review')">✕</button>
+    </div>
+    <div style="font-size:12px;color:#888;margin-bottom:16px">Edit, delete, or adjust splits before importing. All amounts in original currency.</div>
+    <div id="import-review-list" style="max-height:55vh;overflow-y:auto;margin-bottom:16px"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:1px solid var(--rule)">
+      <div style="font-size:12px;color:#aaa" id="import-review-count"></div>
+      <div class="flex gap-2">
+        <button class="btn btn-secondary" onclick="closeModal('modal-import-review')">Cancel</button>
+        <button class="btn btn-primary" id="import-confirm-btn" onclick="saveImportedExpenses()">Import all</button>
       </div>
     </div>
   </div>
@@ -1221,6 +1265,125 @@ async function savePaymentModal() {
     closeModal("modal-payment");
     toast(`${fromName} → ${toName}: ${formatAmt(amount)} ${state.currency} recorded ✓`);
   } catch(e) { toast(e.message); } finally { hideLoading(); }
+}
+
+// ── IMPORT STATEMENT ─────────────────────────────────────
+let importPayerId = null, importPayerName = null, importRows = [];
+
+function openImportStatement() {
+  if (!state.members.length) return toast("No members yet");
+  const opts = state.members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
+  document.getElementById("import-payer").innerHTML = opts;
+  if (state.me) document.getElementById("import-payer").value = state.me.memberId;
+  document.getElementById("import-upload").value = "";
+  document.getElementById("import-upload-label").style.borderColor = "var(--rule)";
+  document.getElementById("import-scanning").style.display = "none";
+  showModal("modal-import-step1");
+}
+
+async function runImportScan(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const payerSel = document.getElementById("import-payer");
+  importPayerId   = payerSel.value;
+  importPayerName = payerSel.options[payerSel.selectedIndex].text;
+  document.getElementById("import-upload-label").style.borderColor = "var(--accent)";
+  document.getElementById("import-scanning").style.display = "block";
+  try {
+    const base64 = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
+    const response = await fetch("/api/scan-receipt", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 2000,
+        messages: [{
+          role: "user",
+          content: [
+            {type:"image",source:{type:"base64",media_type:file.type,data:base64}},
+            {type:"text",text:`You are an expense tracker. Analyse this credit card statement or Apple Pay screenshot and extract ALL transactions.
+
+Return ONLY a valid JSON array, no explanation, no markdown:
+
+[
+  {"itemName":"Merchant Name, Category, DD Mon","amount":123.45,"currency":"HKD","category":"Meals","notes":""},
+  ...
+]
+
+Rules:
+- itemName: merchant name + ONE category word (Dinner/Lunch/Coffee/Drinks/Taxi/Stay/Ticket/Shopping/Groceries/Health/Other) + date if visible. Max 40 chars.
+- amount: positive number always (ignore refunds/credits)
+- currency: 3-letter code from statement. Default HKD if unclear.
+- category: one of — Meals, Drinks, Transport, Accommodation, Entertainment, Shopping, Groceries, Health, Activities, Other
+- notes: brief detail if visible, else empty string
+- Skip refunds, credits, payments, transfers
+- Include ALL purchase transactions visible`}
+          ]
+        }]
+      })
+    });
+    const data = await response.json();
+    const text = (data.content?.[0]?.text||"").replace(/```json|```/g,"").trim();
+    const parsed = JSON.parse(text);
+    if (!Array.isArray(parsed)||!parsed.length) return toast("No transactions found — try a clearer screenshot");
+    importRows = parsed.map((r,i)=>({...r,id:i,deleted:false,splitMode:"all"}));
+    closeModal("modal-import-step1");
+    renderImportReview();
+    showModal("modal-import-review");
+  } catch(e) { toast("Could not read statement — try a clearer screenshot"); }
+  finally { document.getElementById("import-scanning").style.display="none"; }
+}
+
+function renderImportReview() {
+  const active = importRows.filter(r=>!r.deleted);
+  document.getElementById("import-review-count").textContent = `${active.length} transaction${active.length!==1?"s":""}`;
+  document.getElementById("import-confirm-btn").textContent = `Import ${active.length}`;
+  const memberOpts = state.members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
+  const catOpts = `<option value="">— None —</option>`+state.categories.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
+  document.getElementById("import-review-list").innerHTML = importRows.map((row,i)=>{
+    if (row.deleted) return "";
+    return `<div style="border:1.5px solid var(--rule);border-radius:6px;padding:12px;margin-bottom:8px;background:rgba(255,255,255,.7)">
+      <div style="display:grid;grid-template-columns:1fr 90px 70px auto;gap:6px;align-items:center;margin-bottom:8px">
+        <input type="text" value="${esc(row.itemName)}" style="font-size:13px;padding:6px 8px" onchange="importRows[${i}].itemName=this.value">
+        <input type="number" value="${row.amount}" min="0" step="0.01" style="font-size:13px;padding:6px 8px;text-align:right;font-family:var(--mono)" onchange="importRows[${i}].amount=parseFloat(this.value)||0">
+        <select style="font-size:12px;padding:6px 4px" onchange="importRows[${i}].currency=this.value">
+          ${["HKD","SGD","USD","EUR","GBP","JPY","AUD","CNY","THB"].map(c=>`<option${c===row.currency?" selected":""}>${c}</option>`).join("")}
+        </select>
+        <button onclick="importRows[${i}].deleted=true;renderImportReview()" style="background:none;border:none;cursor:pointer;color:#bbb;font-size:16px;padding:0 4px" title="Remove">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <select style="font-size:12px;padding:6px 8px" onchange="importRows[${i}].category=this.value">${catOpts.replace(`value="${esc(row.category)}"`,`value="${esc(row.category)}" selected`)}</select>
+        <select style="font-size:12px;padding:6px 8px" onchange="importRows[${i}].splitMode=this.value">
+          <option value="all"${row.splitMode==="all"?" selected":""}>Split: all members</option>
+          <option value="payer"${row.splitMode==="payer"?" selected":""}>Split: payer only</option>
+        </select>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+async function saveImportedExpenses() {
+  const active = importRows.filter(r=>!r.deleted);
+  if (!active.length) return toast("No transactions to import");
+  const btn = document.getElementById("import-confirm-btn");
+  btn.disabled = true;
+  let saved = 0;
+  for (const row of active) {
+    const splitBetween = row.splitMode==="all"
+      ? state.members.map(m=>m.memberId)
+      : [importPayerId];
+    try {
+      await api("addExpense",{projectId:state.projectId,itemName:row.itemName,amount:row.amount,currency:row.currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:row.category||"",notes:row.notes||"",customSplits:""});
+      saved++;
+      btn.textContent = `Importing ${saved}/${active.length}…`;
+    } catch(e) { toast("Error on: "+row.itemName); }
+  }
+  const expRes = await api("getExpenses",{projectId:state.projectId});
+  state.expenses = expRes.expenses;
+  renderExpenses();
+  closeModal("modal-import-review");
+  toast(`${saved} expense${saved!==1?"s":""} imported ✓`);
+  btn.disabled = false;
 }
 
 // ── CORE UTILS ───────────────────────────────────────────
