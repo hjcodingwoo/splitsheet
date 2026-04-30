@@ -470,7 +470,9 @@ function buildTotals(filterMemberId) {
       grandTotal+=converted; byCategory[cat]=(byCategory[cat]||0)+converted; byPerson[exp.payerName]=(byPerson[exp.payerName]||0)+converted;
     } else {
       if(!split.includes(filterMemberId)) return;
-      const share=converted/split.length; grandTotal+=share; byCategory[cat]=(byCategory[cat]||0)+share; byPerson[exp.payerName]=(byPerson[exp.payerName]||0)+share;
+      const custom=exp.customSplits?(()=>{try{return JSON.parse(exp.customSplits);}catch{return null;}})():null;
+      const rawTotal=custom?split.reduce((s,id)=>s+(parseFloat(custom[id])||0),0):0;
+      const share=custom&&rawTotal>0?(parseFloat(custom[filterMemberId])||0)/rawTotal*converted:converted/split.length; grandTotal+=share; byCategory[cat]=(byCategory[cat]||0)+share; byPerson[exp.payerName]=(byPerson[exp.payerName]||0)+share;
     }
   });
   return {byCategory,byPerson,grandTotal,hasMissing};
@@ -864,7 +866,12 @@ function renderTotalsCharts(filterMemberId) {
     const itemRows=items.map(exp=>{
       const split=(Array.isArray(exp.splitBetween)?exp.splitBetween:String(exp.splitBetween).split(",")).filter(s=>s);
       const base=toBase(exp.amount,exp.currency||state.currency);
-      const share=(filterMemberId&&filterMemberId!=="all"&&base!==null)?base/split.length:base;
+      let share=base;
+      if(filterMemberId&&filterMemberId!=="all"&&base!==null){
+        const custom=exp.customSplits?(()=>{try{return JSON.parse(exp.customSplits);}catch{return null;}})():null;
+        const rawTotal=custom?split.reduce((s,id)=>s+(parseFloat(custom[id])||0),0):0;
+        share=custom&&rawTotal>0?(parseFloat(custom[filterMemberId])||0)/rawTotal*base:base/split.length;
+      }
       const date=new Date(exp.createdAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0 7px 20px;border-bottom:1px dashed var(--rule);font-size:12px;">
         <div><span>${esc(exp.itemName)}</span><span style="color:#aaa;font-size:11px;margin-left:6px">${date} · ${esc(exp.payerName)}</span></div>
