@@ -187,10 +187,10 @@
   <div id="tab-expenses" class="px-4 pb-20" style="max-width:720px;margin:0 auto;">
     <div class="flex items-center justify-between py-4">
       <div style="font-family:var(--mono);font-size:11px;color:#aaa" id="exp-count"></div>
-      <div class="flex gap-2">
-        <button class="btn btn-secondary" onclick="openImportStatement()">📄 Import</button>
-        <button class="btn btn-secondary" onclick="openAddPaymentModal()">+ Payment</button>
-        <button class="btn btn-primary" onclick="openAddExpense()"><span style="font-size:16px;line-height:1">+</span> Add expense</button>
+      <div class="flex gap-1.5 flex-wrap justify-end">
+        <button onclick="openAddExpense()" style="font-family:var(--sans);font-size:12px;font-weight:500;padding:6px 12px;border-radius:4px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;white-space:nowrap">+ Add expense</button>
+        <button onclick="openImportStatement()" style="font-family:var(--sans);font-size:12px;font-weight:500;padding:6px 12px;border-radius:4px;border:1.5px solid var(--green);background:var(--green);color:#fff;cursor:pointer;white-space:nowrap">+ Batch import</button>
+        <button onclick="openAddPaymentModal()" style="font-family:var(--sans);font-size:12px;font-weight:500;padding:6px 12px;border-radius:4px;border:1.5px solid var(--rule);background:transparent;color:var(--ink);cursor:pointer;white-space:nowrap">+ Payment settled</button>
       </div>
     </div>
     <div id="expense-list" class="card"><div class="text-sm text-gray-400 text-center py-8">No expenses yet.</div></div>
@@ -386,18 +386,22 @@
     <div class="grid gap-4">
       <div><label>Who paid this card?</label><select id="import-payer"></select></div>
       <div>
-        <label>Statement screenshot</label>
-        <input type="file" id="import-upload" accept="image/*" style="display:none" onchange="runImportScan(this)">
-        <button class="btn btn-secondary w-full" type="button" onclick="document.getElementById('import-upload').click()" id="import-upload-label" style="justify-content:center;gap:10px;padding:20px;border-style:dashed;color:#888;border-color:var(--rule)">
-          <span style="font-size:20px">📷</span>
-          <div style="text-align:left"><div style="font-weight:500;color:var(--ink);font-size:13px">Tap to upload screenshot</div><div style="font-size:11px;margin-top:1px">JPG, PNG, HEIC</div></div>
+        <label>Screenshots <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#bbb;font-size:11px">(add one or more)</span></label>
+        <input type="file" id="import-upload" accept="image/*" multiple style="display:none" onchange="addImportFiles(this)">
+        <button class="btn btn-secondary w-full" type="button" onclick="document.getElementById('import-upload').click()" style="justify-content:center;gap:10px;padding:16px;border-style:dashed;color:#888;border-color:var(--rule)">
+          <span style="font-size:18px">📷</span>
+          <span style="font-size:13px;color:var(--ink);font-weight:500">Add screenshots</span>
         </button>
+        <div id="import-file-queue" style="display:none;margin-top:8px;display:flex;flex-wrap:wrap;gap:6px"></div>
       </div>
       <div id="import-scanning" style="display:none;text-align:center;padding:16px;background:var(--cream);border-radius:6px;font-size:13px;color:#888">
         <div style="display:inline-block;width:14px;height:14px;border:2px solid #ccc;border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:middle"></div>
-        Reading statement with AI…
+        <span id="import-scanning-msg">Scanning with AI…</span>
       </div>
-      <button class="btn btn-secondary w-full" onclick="closeModal('modal-import-step1')">Cancel</button>
+      <div class="flex gap-3">
+        <button class="btn btn-secondary flex-1" onclick="closeModal('modal-import-step1')">Cancel</button>
+        <button class="btn btn-primary flex-1" id="import-scan-btn" onclick="runImportScan()" disabled style="opacity:.45">Scan & review</button>
+      </div>
     </div>
   </div>
 </div>
@@ -481,11 +485,10 @@ function showGuide() { document.getElementById("guide-no-show").checked=false; d
 function closeGuide() { if(document.getElementById("guide-no-show").checked) localStorage.setItem("sc_guide_seen","1"); document.getElementById("modal-guide").style.display="none"; }
 
 // ── API ───────────────────────────────────────────────────
-function api(action, params = {}) {
+function apiOnce(action, params, cb) {
   return new Promise((resolve, reject) => {
     const all = { action, ...params };
     if (Array.isArray(all.splitBetween)) all.splitBetween = all.splitBetween.join(",");
-    const cb = "_cb_" + Date.now();
     all.callback = cb;
     const url = new URL(API_URL);
     for (const [k,val] of Object.entries(all)) if (val !== undefined && val !== null) url.searchParams.set(k, String(val));
@@ -494,6 +497,13 @@ function api(action, params = {}) {
     s.src = url.toString();
     s.onerror = () => { delete window[cb]; reject(new Error("Failed to reach server.")); };
     document.getElementById("jsonp-container").appendChild(s);
+  });
+}
+function api(action, params = {}, _retry = true) {
+  const cb = "_cb_" + Date.now() + "_" + Math.random().toString(36).slice(2,6);
+  return apiOnce(action, params, cb).catch(err => {
+    if (_retry) { return new Promise(res => setTimeout(res, 2000)).then(() => api(action, params, false)); }
+    throw err;
   });
 }
 
@@ -1276,21 +1286,53 @@ function openImportStatement() {
   document.getElementById("import-payer").innerHTML = opts;
   if (state.me) document.getElementById("import-payer").value = state.me.memberId;
   document.getElementById("import-upload").value = "";
-  document.getElementById("import-upload-label").style.borderColor = "var(--rule)";
   document.getElementById("import-scanning").style.display = "none";
+  importFileQueue = [];
+  renderImportQueue();
   showModal("modal-import-step1");
 }
 
-async function runImportScan(input) {
-  const file = input.files[0];
-  if (!file) return;
+let importFileQueue = []; // {file, dataUrl}
+
+function addImportFiles(input) {
+  const files = [...input.files];
+  input.value = "";
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      importFileQueue.push({file, dataUrl: e.target.result});
+      renderImportQueue();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderImportQueue() {
+  const div = document.getElementById("import-file-queue");
+  const btn = document.getElementById("import-scan-btn");
+  if (!importFileQueue.length) { div.style.display="none"; btn.disabled=true; btn.style.opacity=".45"; return; }
+  div.style.display = "flex";
+  div.innerHTML = importFileQueue.map((f,i) => `
+    <div style="position:relative;width:56px;height:56px;border-radius:4px;overflow:hidden;border:1.5px solid var(--rule)">
+      <img src="${f.dataUrl}" style="width:100%;height:100%;object-fit:cover">
+      <button onclick="importFileQueue.splice(${i},1);renderImportQueue()" style="position:absolute;top:1px;right:1px;background:rgba(0,0,0,.55);border:none;border-radius:50%;width:16px;height:16px;color:#fff;font-size:9px;cursor:pointer;padding:0;line-height:1">✕</button>
+    </div>`).join("");
+  btn.disabled = false; btn.style.opacity = "1";
+}
+
+async function runImportScan() {
+  if (!importFileQueue.length) return toast("Add at least one screenshot first");
   const payerSel = document.getElementById("import-payer");
   importPayerId   = payerSel.value;
   importPayerName = payerSel.options[payerSel.selectedIndex].text;
-  document.getElementById("import-upload-label").style.borderColor = "var(--accent)";
   document.getElementById("import-scanning").style.display = "block";
+  document.getElementById("import-scan-btn").disabled = true;
+  document.getElementById("import-scanning-msg").textContent = "Scanning all images…";
   try {
-    const base64 = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
+    const imageBlocks = await Promise.all(importFileQueue.map(async ({file}) => {
+      const base64 = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
+      return {type:"image",source:{type:"base64",media_type:file.type,data:base64}};
+    }));
     const response = await fetch("/api/scan-receipt", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
@@ -1300,10 +1342,10 @@ async function runImportScan(input) {
         messages: [{
           role: "user",
           content: [
-            {type:"image",source:{type:"base64",media_type:file.type,data:base64}},
-            {type:"text",text:`You are an expense tracker. Analyse this credit card statement or Apple Pay screenshot and extract ALL transactions.
+            ...imageBlocks,
+            {type:"text",text:`You are an expense tracker. Analyse ALL the credit card statement or Apple Pay screenshots provided and extract every transaction across all images.
 
-Return ONLY a valid JSON array, no explanation, no markdown:
+Return ONLY a valid JSON array combining all transactions from all images, no explanation, no markdown:
 
 [
   {"itemName":"Merchant Name, Category, DD Mon","amount":123.45,"currency":"HKD","category":"Meals","notes":""},
@@ -1317,7 +1359,7 @@ Rules:
 - category: one of — Meals, Drinks, Transport, Accommodation, Entertainment, Shopping, Groceries, Health, Activities, Other
 - notes: brief detail if visible, else empty string
 - Skip refunds, credits, payments, transfers
-- Include ALL purchase transactions visible`}
+- Deduplicate if the same transaction appears in multiple images`}
           ]
         }]
       })
@@ -1325,13 +1367,14 @@ Rules:
     const data = await response.json();
     const text = (data.content?.[0]?.text||"").replace(/```json|```/g,"").trim();
     const parsed = JSON.parse(text);
-    if (!Array.isArray(parsed)||!parsed.length) return toast("No transactions found — try a clearer screenshot");
-    importRows = parsed.map((r,i)=>({...r,id:i,deleted:false,splitMode:"all"}));
+    if (!Array.isArray(parsed)||!parsed.length) return toast("No transactions found — try clearer screenshots");
+    importRows = parsed.map((r,i)=>({...r,id:i,deleted:false,splitMode:"all",splitMembers:state.members.map(m=>m.memberId)}));
+    importFileQueue = [];
     closeModal("modal-import-step1");
     renderImportReview();
     showModal("modal-import-review");
   } catch(e) { toast("Could not read statement — try a clearer screenshot"); }
-  finally { document.getElementById("import-scanning").style.display="none"; }
+  finally { document.getElementById("import-scanning").style.display="none"; document.getElementById("import-scan-btn").disabled=false; document.getElementById("import-scan-btn").style.opacity="1"; }
 }
 
 function renderImportReview() {
@@ -1367,14 +1410,29 @@ function renderImportReview() {
           <button type="button" onclick="importAddCategory(${i})" style="background:none;border:1.5px solid var(--rule);border-radius:4px;cursor:pointer;font-size:11px;padding:4px 8px;white-space:nowrap;color:#666;font-family:var(--sans)">+ New</button>
         </div>
         <input type="text" value="${esc(row.notes||"")}" placeholder="Notes (optional)" style="font-size:12px;padding:6px 8px" onchange="importRows[${i}].notes=this.value">
-        <select style="font-size:12px;padding:6px 8px" onchange="importRows[${i}].splitMode=this.value">
-          <option value="all"${row.splitMode==="all"?" selected":""}>Split equally — all members</option>
-          <option value="payer"${row.splitMode==="payer"?" selected":""}>Payer only (no split)</option>
-          <option value="custom"${row.splitMode==="custom"?" selected":""}>Custom — edit after import</option>
-        </select>
+        <div>
+          <div style="font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#888;margin-bottom:5px">Split between</div>
+          <div style="display:flex;flex-wrap:wrap;gap:5px">
+            ${state.members.map(m=>{
+              const checked=(row.splitMembers||[]).includes(m.memberId);
+              return `<label style="display:flex;align-items:center;gap:5px;padding:5px 10px;border:1.5px solid ${checked?'var(--ink)':'var(--rule)'};border-radius:4px;cursor:pointer;font-size:12px;background:${checked?'var(--ink)':'transparent'};color:${checked?'#fff':'var(--ink)'}">
+                <input type="checkbox" ${checked?"checked":""} style="display:none" onchange="toggleImportMember(${i},'${m.memberId}',this.checked)">
+                ${esc(m.name)}
+              </label>`;
+            }).join("")}
+          </div>
+        </div>
       </div>
     </div>`;
   }).join("");
+}
+
+function toggleImportMember(rowIdx, memberId, checked) {
+  if (!importRows[rowIdx].splitMembers) importRows[rowIdx].splitMembers = state.members.map(m=>m.memberId);
+  if (checked) { if (!importRows[rowIdx].splitMembers.includes(memberId)) importRows[rowIdx].splitMembers.push(memberId); }
+  else { importRows[rowIdx].splitMembers = importRows[rowIdx].splitMembers.filter(id=>id!==memberId); }
+  // Re-render just the chips for this row without full re-render (avoid losing focus)
+  renderImportReview();
 }
 
 async function importAddCategory(rowIdx) {
@@ -1396,8 +1454,8 @@ async function saveImportedExpenses() {
   btn.disabled = true;
   let saved = 0;
   for (const row of active) {
-    const splitBetween = row.splitMode==="payer"
-      ? [importPayerId]
+    const splitBetween = (row.splitMembers&&row.splitMembers.length)
+      ? row.splitMembers
       : state.members.map(m=>m.memberId);
     if (row.fxRate && row.currency && row.currency !== state.currency) {
       try { await api("setFxRate",{projectId:state.projectId,currency:row.currency,rate:row.fxRate}); state.fxRates[row.currency]=row.fxRate; } catch(e){}
