@@ -387,11 +387,11 @@
       <div><label>Who paid this card?</label><select id="import-payer"></select></div>
       <div>
         <label>Statement screenshot</label>
-        <label for="import-upload" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:32px;border:2px dashed var(--rule);border-radius:6px;cursor:pointer;font-size:13px;color:#888;text-transform:none;letter-spacing:0;margin:0;transition:all .15s" id="import-upload-label">
-          <span style="font-size:24px">📷</span>
-          <div><div style="font-weight:500;color:var(--ink)">Tap to upload screenshot</div><div style="font-size:11px;margin-top:2px">JPG, PNG, HEIC</div></div>
-        </label>
         <input type="file" id="import-upload" accept="image/*" style="display:none" onchange="runImportScan(this)">
+        <button class="btn btn-secondary w-full" type="button" onclick="document.getElementById('import-upload').click()" id="import-upload-label" style="justify-content:center;gap:10px;padding:20px;border-style:dashed;color:#888;border-color:var(--rule)">
+          <span style="font-size:20px">📷</span>
+          <div style="text-align:left"><div style="font-weight:500;color:var(--ink);font-size:13px">Tap to upload screenshot</div><div style="font-size:11px;margin-top:1px">JPG, PNG, HEIC</div></div>
+        </button>
       </div>
       <div id="import-scanning" style="display:none;text-align:center;padding:16px;background:var(--cream);border-radius:6px;font-size:13px;color:#888">
         <div style="display:inline-block;width:14px;height:14px;border:2px solid #ccc;border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:middle"></div>
@@ -599,7 +599,7 @@ function renderExpenses() {
     return `<div class="expense-row">
       <div>
         <div class="font-medium text-sm">${esc(exp.itemName)} ${catPill}</div>
-        <div class="text-xs text-gray-400 mt-0.5">Paid by <strong>${esc(exp.payerName)}</strong>${isMine?' <span style="color:var(--accent)">· you</span>':''} · Split: ${esc(splitNames)}</div>
+        <div class="text-xs text-gray-400 mt-0.5">Paid by <strong>${esc(exp.payerName)}</strong>${isMine?' <span style="color:var(--accent)">· you</span>':''} · Split: ${esc(splitNames)} <span style="font-family:var(--mono);font-size:9px;padding:1px 5px;border-radius:3px;margin-left:2px;background:${exp.customSplits?'var(--accent-lt)':'var(--cream)'};color:${exp.customSplits?'var(--accent)':'#888'}">${exp.customSplits?'custom':'equal'}</span></div>
         ${noteLine}
         <div style="font-family:var(--mono);font-size:10px;color:#bbb;margin-top:2px">${date}</div>
       </div>
@@ -1338,28 +1338,55 @@ function renderImportReview() {
   const active = importRows.filter(r=>!r.deleted);
   document.getElementById("import-review-count").textContent = `${active.length} transaction${active.length!==1?"s":""}`;
   document.getElementById("import-confirm-btn").textContent = `Import ${active.length}`;
-  const memberOpts = state.members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
   const catOpts = `<option value="">— None —</option>`+state.categories.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
   document.getElementById("import-review-list").innerHTML = importRows.map((row,i)=>{
     if (row.deleted) return "";
+    const needsFx = row.currency && row.currency !== state.currency;
+    const savedRate = state.fxRates[row.currency] || "";
     return `<div style="border:1.5px solid var(--rule);border-radius:6px;padding:12px;margin-bottom:8px;background:rgba(255,255,255,.7)">
-      <div style="display:grid;grid-template-columns:1fr 90px 70px auto;gap:6px;align-items:center;margin-bottom:8px">
-        <input type="text" value="${esc(row.itemName)}" style="font-size:13px;padding:6px 8px" onchange="importRows[${i}].itemName=this.value">
-        <input type="number" value="${row.amount}" min="0" step="0.01" style="font-size:13px;padding:6px 8px;text-align:right;font-family:var(--mono)" onchange="importRows[${i}].amount=parseFloat(this.value)||0">
-        <select style="font-size:12px;padding:6px 4px" onchange="importRows[${i}].currency=this.value">
-          ${["HKD","SGD","USD","EUR","GBP","JPY","AUD","CNY","THB"].map(c=>`<option${c===row.currency?" selected":""}>${c}</option>`).join("")}
-        </select>
-        <button onclick="importRows[${i}].deleted=true;renderImportReview()" style="background:none;border:none;cursor:pointer;color:#bbb;font-size:16px;padding:0 4px" title="Remove">✕</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:11px;font-weight:500;letter-spacing:.06em;color:#aaa;text-transform:uppercase">Transaction ${i+1}</span>
+        <button onclick="importRows[${i}].deleted=true;renderImportReview()" style="background:none;border:none;cursor:pointer;color:#bbb;font-size:16px;padding:0 4px;line-height:1" title="Remove">✕</button>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-        <select style="font-size:12px;padding:6px 8px" onchange="importRows[${i}].category=this.value">${catOpts.replace(`value="${esc(row.category)}"`,`value="${esc(row.category)}" selected`)}</select>
+      <div style="display:grid;gap:6px">
+        <input type="text" value="${esc(row.itemName)}" placeholder="Item name" style="font-size:13px;padding:6px 8px" onchange="importRows[${i}].itemName=this.value">
+        <div style="display:grid;grid-template-columns:1fr 90px 70px;gap:6px">
+          <input type="number" value="${row.amount}" min="0" step="0.01" style="font-size:13px;padding:6px 8px;text-align:right;font-family:var(--mono)" onchange="importRows[${i}].amount=parseFloat(this.value)||0;renderImportReview()">
+          <select style="font-size:12px;padding:6px 4px" onchange="importRows[${i}].currency=this.value;renderImportReview()">
+            ${["HKD","SGD","USD","EUR","GBP","JPY","AUD","CAD","CNY","THB","MYR"].map(c=>`<option${c===row.currency?" selected":""}>${c}</option>`).join("")}
+          </select>
+          <span style="display:flex;align-items:center;font-size:11px;font-family:var(--mono);color:#888;padding:0 4px">${row.currency||state.currency}</span>
+        </div>
+        ${needsFx ? `<div style="background:var(--accent-lt);border-radius:4px;padding:6px 8px;display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;color:var(--accent);white-space:nowrap;flex-shrink:0">1 ${row.currency} = ? ${state.currency}</span>
+          <input type="number" value="${savedRate}" min="0" step="0.0001" placeholder="FX rate" style="font-size:12px;padding:4px 6px;font-family:var(--mono);flex:1" onchange="importRows[${i}].fxRate=parseFloat(this.value)||null">
+          <span style="font-size:10px;color:#aaa;white-space:nowrap">${savedRate?"(saved)":"(not set)"}</span>
+        </div>` : ""}
+        <div style="display:flex;gap:6px">
+          <select style="font-size:12px;padding:6px 8px;flex:1" onchange="importRows[${i}].category=this.value">${catOpts.replace(`value="${esc(row.category)}"`,`value="${esc(row.category)}" selected`)}</select>
+          <button type="button" onclick="importAddCategory(${i})" style="background:none;border:1.5px solid var(--rule);border-radius:4px;cursor:pointer;font-size:11px;padding:4px 8px;white-space:nowrap;color:#666;font-family:var(--sans)">+ New</button>
+        </div>
+        <input type="text" value="${esc(row.notes||"")}" placeholder="Notes (optional)" style="font-size:12px;padding:6px 8px" onchange="importRows[${i}].notes=this.value">
         <select style="font-size:12px;padding:6px 8px" onchange="importRows[${i}].splitMode=this.value">
-          <option value="all"${row.splitMode==="all"?" selected":""}>Split: all members</option>
-          <option value="payer"${row.splitMode==="payer"?" selected":""}>Split: payer only</option>
+          <option value="all"${row.splitMode==="all"?" selected":""}>Split equally — all members</option>
+          <option value="payer"${row.splitMode==="payer"?" selected":""}>Payer only (no split)</option>
+          <option value="custom"${row.splitMode==="custom"?" selected":""}>Custom — edit after import</option>
         </select>
       </div>
     </div>`;
   }).join("");
+}
+
+async function importAddCategory(rowIdx) {
+  const name = prompt("New category name:");
+  if (!name||!name.trim()) return;
+  try {
+    const res = await api("addCategory",{projectId:state.projectId,name:name.trim()});
+    if (!state.categories.find(c=>c.name===res.name)) state.categories.push({categoryId:res.categoryId,name:res.name});
+    importRows[rowIdx].category = res.name;
+    renderImportReview();
+    toast("Category added: "+res.name);
+  } catch(e) { toast(e.message); }
 }
 
 async function saveImportedExpenses() {
@@ -1369,9 +1396,12 @@ async function saveImportedExpenses() {
   btn.disabled = true;
   let saved = 0;
   for (const row of active) {
-    const splitBetween = row.splitMode==="all"
-      ? state.members.map(m=>m.memberId)
-      : [importPayerId];
+    const splitBetween = row.splitMode==="payer"
+      ? [importPayerId]
+      : state.members.map(m=>m.memberId);
+    if (row.fxRate && row.currency && row.currency !== state.currency) {
+      try { await api("setFxRate",{projectId:state.projectId,currency:row.currency,rate:row.fxRate}); state.fxRates[row.currency]=row.fxRate; } catch(e){}
+    }
     try {
       await api("addExpense",{projectId:state.projectId,itemName:row.itemName,amount:row.amount,currency:row.currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:row.category||"",notes:row.notes||"",customSplits:""});
       saved++;
