@@ -1320,32 +1320,21 @@ function renderImportQueue() {
   btn.disabled = false; btn.style.opacity = "1";
 }
 
-async function runImportScan() {
-  if (!importFileQueue.length) return toast("Add at least one screenshot first");
-  const payerSel = document.getElementById("import-payer");
-  importPayerId   = payerSel.value;
-  importPayerName = payerSel.options[payerSel.selectedIndex].text;
-  document.getElementById("import-scanning").style.display = "block";
-  document.getElementById("import-scan-btn").disabled = true;
-  document.getElementById("import-scanning-msg").textContent = "Scanning all images…";
-  try {
-    const imageBlocks = await Promise.all(importFileQueue.map(async ({file}) => {
-      const base64 = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
-      return {type:"image",source:{type:"base64",media_type:file.type,data:base64}};
-    }));
-    const response = await fetch("/api/scan-receipt", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 2000,
-        messages: [{
-          role: "user",
-          content: [
-            ...imageBlocks,
-            {type:"text",text:`You are an expense tracker. Analyse ALL the credit card statement or Apple Pay screenshots provided and extract every transaction across all images.
+async function scanOneImage(file) {
+  const base64 = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
+  const response = await fetch("/api/scan-receipt", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 2000,
+      messages: [{
+        role: "user",
+        content: [
+          {type:"image",source:{type:"base64",media_type:file.type,data:base64}},
+          {type:"text",text:`You are an expense tracker. Analyse this credit card statement or Apple Pay screenshot and extract ALL transactions.
 
-Return ONLY a valid JSON array combining all transactions from all images, no explanation, no markdown:
+Return ONLY a valid JSON array, no explanation, no markdown:
 
 [
   {"itemName":"Merchant Name, Category, DD Mon","amount":123.45,"currency":"HKD","category":"Meals","notes":""},
@@ -1359,16 +1348,34 @@ Rules:
 - category: one of — Meals, Drinks, Transport, Accommodation, Entertainment, Shopping, Groceries, Health, Activities, Other
 - notes: brief detail if visible, else empty string
 - Skip refunds, credits, payments, transfers
-- Deduplicate if the same transaction appears in multiple images`}
-          ]
-        }]
-      })
-    });
-    const data = await response.json();
-    const text = (data.content?.[0]?.text||"").replace(/```json|```/g,"").trim();
-    const parsed = JSON.parse(text);
-    if (!Array.isArray(parsed)||!parsed.length) return toast("No transactions found — try clearer screenshots");
-    importRows = parsed.map((r,i)=>({...r,id:i,deleted:false,splitMode:"all",splitMembers:state.members.map(m=>m.memberId)}));
+- Include ALL purchase transactions visible`}
+        ]
+      }]
+    })
+  });
+  const data = await response.json();
+  const text = (data.content?.[0]?.text||"").replace(/```json|```/g,"").trim();
+  return JSON.parse(text);
+}
+
+async function runImportScan() {
+  if (!importFileQueue.length) return toast("Add at least one screenshot first");
+  const payerSel = document.getElementById("import-payer");
+  importPayerId   = payerSel.value;
+  importPayerName = payerSel.options[payerSel.selectedIndex].text;
+  document.getElementById("import-scanning").style.display = "block";
+  document.getElementById("import-scan-btn").disabled = true;
+  const msgEl = document.getElementById("import-scanning-msg");
+  let allRows = [];
+  try {
+    for (let i=0; i<importFileQueue.length; i++) {
+      msgEl.textContent = `Scanning image ${i+1} of ${importFileQueue.length}…`;
+      const parsed = await scanOneImage(importFileQueue[i].file);
+      if (Array.isArray(parsed)) allRows = allRows.concat(parsed);
+    }
+    if (!allRows.length) return toast("No transactions found — try clearer screenshots");
+    const stmtDate = document.getElementById("import-stmt-date").value;
+    importRows = allRows.map((r,i)=>({...r,id:i,deleted:false,splitMode:"all",splitMembers:state.members.map(m=>m.memberId),expenseDate:stmtDate}));
     importFileQueue = [];
     closeModal("modal-import-step1");
     renderImportReview();
