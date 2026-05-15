@@ -392,7 +392,7 @@
     <div class="grid gap-4">
       <div class="grid grid-cols-2 gap-3">
         <div><label>Who paid this card?</label><select id="import-payer"></select></div>
-        <div><label>Statement date</label><input id="import-stmt-date" type="date"></div>
+        <div><label>Import date</label><input id="import-stmt-date" type="date"></div>
       </div>
       <div>
         <label>Screenshots <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#bbb;font-size:11px">(add one or more)</span></label>
@@ -1389,7 +1389,8 @@ Rules:
 - category: best guess from — Meals, Drinks, Transport, Accommodation, Entertainment, Shopping, Groceries, Health, Activities, Other
 - notes: any readable detail, partial ok, empty string if nothing
 - Only skip if clearly labeled as refund, credit, payment, or transfer
-- Deduplicate if same transaction appears in multiple images`}
+- Deduplicate if same transaction appears in multiple images
+- expenseDate: the transaction date in YYYY-MM-DD. If year unclear assume 2026. Empty string if no date visible at all.`}
           ]
         }]
       })
@@ -1403,23 +1404,21 @@ Rules:
     if (!text) throw new Error("Empty response from AI");
     let parsed;
     try { parsed = JSON.parse(text); } catch(pe) { throw new Error("Could not parse AI response: "+text.substring(0,100)); }
-    if (!Array.isArray(parsed)||!parsed.length) return toast("No transactions found — try clearer screenshots");
-    importRows = parsed.map((r,i)=>({...r,id:i,deleted:false,splitMembers:state.members.map(m=>m.memberId),expenseDate:stmtDate}));
+    if (!Array.isArray(parsed)||!parsed.length) throw new Error("no_transactions");
+    importRows = parsed.map((r,i)=>({...r,id:i,deleted:false,splitMembers:state.members.map(m=>m.memberId),expenseDate:(r.expenseDate&&r.expenseDate.length===10)?r.expenseDate:stmtDate}));
     importFileQueue = [];
     closeModal("modal-import-step1");
     renderImportReview();
     showModal("modal-import-review");
   } catch(e) {
     console.error("Import scan error:", e);
-    toast("Scan error: " + (e.message||"unknown") + " — check console");
+    if(e.message==="no_transactions") toast("No transactions found — try clearer screenshots");
+    else toast("Scan failed: "+(e.message||"unknown error"));
+  } finally {
     document.getElementById("import-scanning").style.display="none";
     document.getElementById("import-scan-btn").disabled=false;
     document.getElementById("import-scan-btn").style.opacity="1";
-    return;
   }
-  document.getElementById("import-scanning").style.display="none";
-  document.getElementById("import-scan-btn").disabled=false;
-  document.getElementById("import-scan-btn").style.opacity="1";
 }
 
 // ── DUPLICATE DETECTION ───────────────────────────────────
