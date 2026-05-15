@@ -1359,10 +1359,7 @@ async function runImportScan() {
       const base64 = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
       return {type:"image",source:{type:"base64",media_type:file.type,data:base64}};
     }));
-    const controller = new AbortController();
-    const timeout = setTimeout(()=>controller.abort(), 55000);
     const response = await fetch("/api/scan-receipt", {
-      signal: controller.signal,
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({
@@ -1395,21 +1392,17 @@ Rules:
         }]
       })
     });
-    clearTimeout(timeout);
-    if (!response.ok) throw new Error(`API error ${response.status}`);
     const data = await response.json();
-    if (data.error) throw new Error(data.error);
-    // Handle both {content:[{text:"..."}]} and direct string response
-    let rawText = "";
-    if (data.content && data.content[0] && data.content[0].text) rawText = data.content[0].text;
-    else if (typeof data === "string") rawText = data;
-    else rawText = JSON.stringify(data);
-    console.log("RAW AI RESPONSE:", rawText);
-    // Extract JSON array from anywhere in response
-    const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) throw new Error("no_transactions");
+    const rawText = (data.content?.[0]?.text||"");
+    const text = rawText.replace(/```json|```/g,"").trim();
+    if (!text) throw new Error("no_transactions");
     let parsed;
-    try { parsed = JSON.parse(jsonMatch[0]); } catch(pe) { throw new Error("no_transactions"); }
+    try { parsed = JSON.parse(text); } catch(pe) {
+      // Try extracting array from anywhere in response
+      const m = rawText.match(/\[[\s\S]*\]/);
+      if (!m) throw new Error("no_transactions");
+      try { parsed = JSON.parse(m[0]); } catch(pe2) { throw new Error("no_transactions"); }
+    }
     if (!Array.isArray(parsed)||!parsed.length) throw new Error("no_transactions");
     importRows = parsed.map((r,i)=>({...r,id:i,deleted:false,splitMembers:state.members.map(m=>m.memberId),expenseDate:(r.expenseDate&&r.expenseDate.length===10)?r.expenseDate:stmtDate}));
     importFileQueue = [];
