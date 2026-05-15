@@ -1400,10 +1400,10 @@ Rules:
     const data = await response.json();
     if (data.error) throw new Error(data.error);
     const rawText = (data.content?.[0]?.text||"");
-    const text = rawText.replace(/```json|```/g,"").trim();
-    if (!text) throw new Error("Empty response from AI");
+    const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) throw new Error("no_transactions");
     let parsed;
-    try { parsed = JSON.parse(text); } catch(pe) { throw new Error("Could not parse AI response: "+text.substring(0,100)); }
+    try { parsed = JSON.parse(jsonMatch[0]); } catch(pe) { throw new Error("no_transactions"); }
     if (!Array.isArray(parsed)||!parsed.length) throw new Error("no_transactions");
     importRows = parsed.map((r,i)=>({...r,id:i,deleted:false,splitMembers:state.members.map(m=>m.memberId),expenseDate:(r.expenseDate&&r.expenseDate.length===10)?r.expenseDate:stmtDate}));
     importFileQueue = [];
