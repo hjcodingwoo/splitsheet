@@ -17,6 +17,7 @@
   input,select{font-family:var(--sans);font-size:14px;background:#fff;border:1.5px solid var(--rule);border-radius:4px;padding:8px 12px;width:100%;color:var(--ink);transition:border-color .15s;outline:none;box-shadow:0 2px 6px rgba(0,0,0,.06);}
   input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-lt);}
   input::placeholder{color:#bbb;}
+  input:disabled{background:#f5f5f5;color:#aaa;cursor:not-allowed;}
   label{display:block;font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#888;margin-bottom:5px;}
   .btn{font-family:var(--sans);font-size:13px;font-weight:500;letter-spacing:.04em;padding:9px 20px;border-radius:4px;border:1.5px solid transparent;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
   .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);}
@@ -127,7 +128,7 @@
       <div class="mb-4"><label>Default currency</label>
         <select id="new-currency">
           <option>USD</option><option>EUR</option><option>GBP</option><option>SGD</option>
-          <option>HKD</option><option>JPY</option><option>AUD</option><option>CAD</option>
+          <option selected>HKD</option><option>JPY</option><option>AUD</option><option>CAD</option>
           <option>CNY</option><option>THB</option><option>MYR</option><option>IDR</option>
           <option>INR</option><option>KRW</option><option>PHP</option>
         </select></div>
@@ -253,10 +254,9 @@
       <div id="settle-missing-list" style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-top:4px"></div>
     </div>
     <div id="settle-list" class="card mb-4"><div class="text-sm text-gray-400 text-center py-8">Add expenses to calculate.</div></div>
-    <!-- Manual payments -->
     <div class="card">
       <div style="font-family:var(--mono);font-size:11px;color:#aaa;margin-bottom:4px">RECORD A PAYMENT</div>
-      <div style="font-size:12px;color:#888;margin-bottom:12px">Record when someone has already paid another person outside the app. This adjusts the remaining balances.</div>
+      <div style="font-size:12px;color:#888;margin-bottom:12px">Record when someone has already paid another person outside the app.</div>
       <div class="grid gap-3">
         <div class="grid grid-cols-2 gap-3">
           <div><label>From (payer)</label><select id="pay-from"></select></div>
@@ -334,7 +334,12 @@
         <div class="flex gap-2">
           <select id="exp-category" style="flex:1"><option value="">— None —</option></select>
           <button class="btn btn-secondary" style="white-space:nowrap;padding:8px 12px;font-size:12px" onclick="openAddCategory()">+ New</button>
-        </div></div>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label>Expense date <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#bbb;font-size:10px">(when it happened)</span></label><input id="exp-date" type="date"></div>
+        <div><label>Log date <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#bbb;font-size:10px">(auto)</span></label><input id="exp-logdate" type="date" disabled></div>
+      </div>
       <div class="grid grid-cols-2 gap-3">
         <div><label>Amount</label><input id="exp-amount" type="number" min="0" step="0.01" placeholder="0.00" oninput="if(splitMode==='custom')renderCustomSplit()"></div>
         <div><label>Currency</label>
@@ -343,7 +348,8 @@
             <option>HKD</option><option>JPY</option><option>AUD</option><option>CAD</option>
             <option>CNY</option><option>THB</option><option>MYR</option><option>IDR</option>
             <option>INR</option><option>KRW</option><option>PHP</option>
-          </select></div>
+          </select>
+        </div>
       </div>
       <div id="fx-rate-row" class="hidden">
         <label id="fx-rate-label">FX Rate</label>
@@ -380,11 +386,14 @@
 
 <!-- IMPORT STEP 1: PICK PAYER + UPLOAD -->
 <div id="modal-import-step1" class="modal-bg hidden" onclick="closeIfBg(event,'modal-import-step1')">
-  <div class="modal" style="max-width:400px">
+  <div class="modal" style="max-width:420px">
     <h2 style="font-family:var(--serif);font-size:1.5rem;margin-bottom:8px">Import statement</h2>
-    <div style="font-size:12px;color:#888;margin-bottom:20px">Upload a screenshot of your credit card statement or Apple Pay wallet. Claude will extract all transactions.</div>
+    <div style="font-size:12px;color:#888;margin-bottom:20px">Upload screenshots of your credit card statement or Apple Pay wallet. Claude will extract all transactions.</div>
     <div class="grid gap-4">
-      <div><label>Who paid this card?</label><select id="import-payer"></select></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label>Who paid this card?</label><select id="import-payer"></select></div>
+        <div><label>Statement date</label><input id="import-stmt-date" type="date"></div>
+      </div>
       <div>
         <label>Screenshots <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#bbb;font-size:11px">(add one or more)</span></label>
         <input type="file" id="import-upload" accept="image/*" multiple style="display:none" onchange="addImportFiles(this)">
@@ -392,7 +401,7 @@
           <span style="font-size:18px">📷</span>
           <span style="font-size:13px;color:var(--ink);font-weight:500">Add screenshots</span>
         </button>
-        <div id="import-file-queue" style="display:none;margin-top:8px;display:flex;flex-wrap:wrap;gap:6px"></div>
+        <div id="import-file-queue" style="display:none;margin-top:8px;flex-wrap:wrap;gap:6px"></div>
       </div>
       <div id="import-scanning" style="display:none;text-align:center;padding:16px;background:var(--cream);border-radius:6px;font-size:13px;color:#888">
         <div style="display:inline-block;width:14px;height:14px;border:2px solid #ccc;border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:middle"></div>
@@ -413,7 +422,7 @@
       <h2 style="font-family:var(--serif);font-size:1.5rem">Review transactions</h2>
       <button class="btn btn-ghost" onclick="closeModal('modal-import-review')">✕</button>
     </div>
-    <div style="font-size:12px;color:#888;margin-bottom:16px">Edit, delete, or adjust splits before importing. All amounts in original currency.</div>
+    <div style="font-size:12px;color:#888;margin-bottom:16px">Edit, delete, or adjust splits before importing.</div>
     <div id="import-review-list" style="max-height:55vh;overflow-y:auto;margin-bottom:16px"></div>
     <div style="display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:1px solid var(--rule)">
       <div style="font-size:12px;color:#aaa" id="import-review-count"></div>
@@ -465,8 +474,7 @@ const PIE_COLORS = ["#c1440e","#2d6a4f","#4a7fbd","#b5860d","#7b4fa6","#c0704a",
 
 let state = {
   projectId:null, project:null, members:[], expenses:[],
-  fxRates:{}, categories:[], me:null, currency:"USD", totalsFilter:"all",
-  payments:[],
+  fxRates:{}, categories:[], me:null, currency:"USD", totalsFilter:"all", payments:[],
 };
 let editingExpenseId = null;
 let splitMode = "equal";
@@ -484,7 +492,7 @@ window.addEventListener("DOMContentLoaded", () => {
 function showGuide() { document.getElementById("guide-no-show").checked=false; document.getElementById("modal-guide").style.display="flex"; }
 function closeGuide() { if(document.getElementById("guide-no-show").checked) localStorage.setItem("sc_guide_seen","1"); document.getElementById("modal-guide").style.display="none"; }
 
-// ── API ───────────────────────────────────────────────────
+// ── API — with auto-retry on cold start ──────────────────
 function apiOnce(action, params, cb) {
   return new Promise((resolve, reject) => {
     const all = { action, ...params };
@@ -502,7 +510,7 @@ function apiOnce(action, params, cb) {
 function api(action, params = {}, _retry = true) {
   const cb = "_cb_" + Date.now() + "_" + Math.random().toString(36).slice(2,6);
   return apiOnce(action, params, cb).catch(err => {
-    if (_retry) { return new Promise(res => setTimeout(res, 2000)).then(() => api(action, params, false)); }
+    if (_retry) return new Promise(res => setTimeout(res, 2000)).then(() => api(action, params, false));
     throw err;
   });
 }
@@ -510,6 +518,8 @@ function api(action, params = {}, _retry = true) {
 function parseProjectInput(val) { try { const u=new URL(val); const p=u.searchParams.get("p"); if(p) document.getElementById("join-id").value=p; } catch {} }
 function toBase(amount, ccy) { const base=state.currency; ccy=(ccy||base).toUpperCase(); if(ccy===base) return parseFloat(amount)||0; const rate=state.fxRates[ccy]; if(rate===undefined||rate===null) return null; return (parseFloat(amount)||0)*rate; }
 function cleanCat(raw) { const s=String(raw||"").trim(); return (s&&s!=="0")?s:"Uncategorised"; }
+function fmtDate(d) { if(!d) return "—"; try { return new Date(d).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}); } catch { return d; } }
+function todayISO() { return new Date().toISOString().split('T')[0]; }
 
 // ── TOTALS BUILDER ────────────────────────────────────────
 function buildTotals(filterMemberId) {
@@ -526,7 +536,8 @@ function buildTotals(filterMemberId) {
       if(!split.includes(filterMemberId)) return;
       const custom=exp.customSplits?(()=>{try{return JSON.parse(exp.customSplits);}catch{return null;}})():null;
       const rawTotal=custom?split.reduce((s,id)=>s+(parseFloat(custom[id])||0),0):0;
-      const share=custom&&rawTotal>0?(parseFloat(custom[filterMemberId])||0)/rawTotal*converted:converted/split.length; grandTotal+=share; byCategory[cat]=(byCategory[cat]||0)+share; byPerson[exp.payerName]=(byPerson[exp.payerName]||0)+share;
+      const share=custom&&rawTotal>0?(parseFloat(custom[filterMemberId])||0)/rawTotal*converted:converted/split.length;
+      grandTotal+=share; byCategory[cat]=(byCategory[cat]||0)+share; byPerson[exp.payerName]=(byPerson[exp.payerName]||0)+share;
     }
   });
   return {byCategory,byPerson,grandTotal,hasMissing};
@@ -599,19 +610,25 @@ function renderExpenses() {
   const sorted=[...expenses].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
   list.innerHTML=sorted.map(exp=>{
     const splitNames=exp.splitBetween.map(id=>memberMap[id]||id).join(", ");
-    const date=new Date(exp.createdAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
     const isMine=state.me&&exp.payerId===state.me.memberId;
     const cat=cleanCat(exp.category);
     const catPill=cat!=="Uncategorised"?`<span class="pill pill-currency" style="margin-left:4px">${esc(cat)}</span>`:"";
     const baseAmt=toBase(exp.amount,exp.currency||state.currency);
     const convNote=(exp.currency&&exp.currency!==state.currency&&baseAmt!==null)?`<span style="font-family:var(--mono);font-size:10px;color:#aaa;display:block">≈ ${formatAmt(baseAmt)} ${state.currency}</span>`:"";
     const noteLine=exp.notes?`<div class="text-xs mt-0.5" style="color:#aaa;font-style:italic">${esc(exp.notes)}</div>`:"";
+    const splitBadge=`<span style="font-family:var(--mono);font-size:9px;padding:1px 5px;border-radius:3px;margin-left:2px;background:${exp.customSplits?'var(--accent-lt)':'var(--cream)'};color:${exp.customSplits?'var(--accent)':'#888'}">${exp.customSplits?'custom':'equal'}</span>`;
+    const expDateStr = exp.expenseDate ? fmtDate(exp.expenseDate) : fmtDate(exp.createdAt);
+    const logDateStr = exp.logDate ? fmtDate(exp.logDate) : fmtDate(exp.createdAt);
     return `<div class="expense-row">
       <div>
         <div class="font-medium text-sm">${esc(exp.itemName)} ${catPill}</div>
-        <div class="text-xs text-gray-400 mt-0.5">Paid by <strong>${esc(exp.payerName)}</strong>${isMine?' <span style="color:var(--accent)">· you</span>':''} · Split: ${esc(splitNames)} <span style="font-family:var(--mono);font-size:9px;padding:1px 5px;border-radius:3px;margin-left:2px;background:${exp.customSplits?'var(--accent-lt)':'var(--cream)'};color:${exp.customSplits?'var(--accent)':'#888'}">${exp.customSplits?'custom':'equal'}</span></div>
+        <div class="text-xs text-gray-400 mt-0.5">Paid by <strong>${esc(exp.payerName)}</strong>${isMine?' <span style="color:var(--accent)">· you</span>':''} · Split: ${esc(splitNames)} ${splitBadge}</div>
         ${noteLine}
-        <div style="font-family:var(--mono);font-size:10px;color:#bbb;margin-top:2px">${date}</div>
+        <div style="font-family:var(--mono);font-size:10px;color:#bbb;margin-top:3px">
+          <span style="color:#888">Expense date:</span> <strong style="color:#666">${expDateStr}</strong>
+          &nbsp;·&nbsp;
+          <span style="color:#888">Logged:</span> <strong style="color:#666">${logDateStr}</strong>
+        </div>
       </div>
       <div class="flex items-start gap-1">
         <div class="text-right">
@@ -641,6 +658,9 @@ function openAddExpense() {
   document.getElementById("exp-amount").value="";
   document.getElementById("exp-currency").value=state.currency;
   document.getElementById("fx-rate-row").classList.add("hidden");
+  const today=todayISO();
+  document.getElementById("exp-date").value=today;
+  document.getElementById("exp-logdate").value=today;
   splitMode="equal"; populateExpenseModal(); setSplitMode("equal");
   showModal("modal-expense"); document.getElementById("exp-name").focus();
 }
@@ -663,6 +683,8 @@ function openEditExpense(expenseId) {
   document.querySelectorAll("#exp-split .check-item").forEach(el=>{
     const checked=splitIds.includes(el.dataset.id); el.classList.toggle("checked",checked); el.querySelector("input").checked=checked;
   });
+  document.getElementById("exp-date").value=exp.expenseDate||new Date(exp.createdAt).toISOString().split('T')[0];
+  document.getElementById("exp-logdate").value=exp.logDate||new Date(exp.createdAt).toISOString().split('T')[0];
   onExpCurrencyChange(exp.currency||state.currency);
   if (exp.customSplits) setSplitMode("custom"); else setSplitMode("equal");
   showModal("modal-expense");
@@ -684,11 +706,13 @@ function populateExpenseModal() {
 async function saveExpense() {
   const itemName=v("exp-name").trim(),amount=parseFloat(v("exp-amount")),
         currency=v("exp-currency"),category=v("exp-category"),notes=v("exp-notes").trim(),
+        expenseDate=v("exp-date"),
         payerSel=document.getElementById("exp-payer"),
         payerId=payerSel.value,payerName=payerSel.options[payerSel.selectedIndex].text,
         splitBetween=[...document.querySelectorAll("#exp-split .check-item.checked")].map(el=>el.dataset.id);
   if(!itemName) return toast("Enter an item name");
   if(!amount||amount<=0) return toast("Enter a valid amount");
+  if(!expenseDate) return toast("Enter expense date");
   if(!splitBetween.length) return toast("Select at least one person");
   let customSplits=null;
   if(splitMode==="custom"){
@@ -703,9 +727,10 @@ async function saveExpense() {
   if(currency!==state.currency&&fxVal) await maybeSaveFxFromExpense(currency,fxVal);
   try {
     if(editingExpenseId){
-      await api("editExpense",{expenseId:editingExpenseId,projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits:customSplits||""});
+      await api("editExpense",{expenseId:editingExpenseId,projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits:customSplits||"",expenseDate});
     } else {
-      await api("addExpense",{projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits});
+      const logDate=todayISO();
+      await api("addExpense",{projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits,expenseDate,logDate});
     }
     const expRes=await api("getExpenses",{projectId:state.projectId});
     state.expenses=expRes.expenses; renderExpenses();
@@ -823,7 +848,7 @@ function renderPaymentsList() {
   if(!state.payments||!state.payments.length){div.innerHTML="";return;}
   div.innerHTML=`<div style="font-family:var(--mono);font-size:11px;color:#aaa;margin-bottom:8px;margin-top:4px">RECORDED PAYMENTS</div>`+
     state.payments.map(p=>{
-      const date=new Date(p.createdAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+      const date=fmtDate(p.createdAt);
       return `<div class="payment-row">
         <div style="flex:1">
           <span style="font-weight:500">${esc(p.fromName)}</span>
@@ -848,6 +873,38 @@ async function deletePayment(paymentId) {
     const payRes=await api("getPayments",{projectId:state.projectId});
     state.payments=payRes.payments||[]; renderPaymentsList(); toast("Deleted");
   } catch(e){toast(e.message);}finally{hideLoading();}
+}
+
+// ── PAYMENT MODAL ─────────────────────────────────────────
+function openAddPaymentModal() {
+  if (!state.members.length) return toast("No members yet");
+  const opts = state.members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
+  document.getElementById("pay-from-modal").innerHTML = opts;
+  document.getElementById("pay-to-modal").innerHTML   = opts;
+  document.getElementById("pay-ccy-modal").textContent = state.currency;
+  document.getElementById("pay-amount-modal").value = "";
+  document.getElementById("pay-note-modal").value   = "";
+  if (state.members.length > 1) document.getElementById("pay-to-modal").selectedIndex = 1;
+  showModal("modal-payment");
+}
+
+async function savePaymentModal() {
+  const fromId   = document.getElementById("pay-from-modal").value;
+  const toId     = document.getElementById("pay-to-modal").value;
+  const amount   = parseFloat(document.getElementById("pay-amount-modal").value);
+  const note     = document.getElementById("pay-note-modal").value.trim();
+  if (fromId === toId) return toast("Payer and recipient must be different");
+  if (!amount || amount <= 0) return toast("Enter a valid amount");
+  const fromName = state.members.find(m=>m.memberId===fromId)?.name;
+  const toName   = state.members.find(m=>m.memberId===toId)?.name;
+  showLoading("Recording…");
+  try {
+    await api("addPayment",{projectId:state.projectId,fromId,fromName,toId,toName,amount,currency:state.currency,note});
+    const payRes = await api("getPayments",{projectId:state.projectId});
+    state.payments = payRes.payments || [];
+    closeModal("modal-payment");
+    toast(`${fromName} → ${toName}: ${formatAmt(amount)} ${state.currency} recorded ✓`);
+  } catch(e) { toast(e.message); } finally { hideLoading(); }
 }
 
 // ── MEMBERS TAB ───────────────────────────────────────────
@@ -926,7 +983,7 @@ function renderTotalsCharts(filterMemberId) {
         const rawTotal=custom?split.reduce((s,id)=>s+(parseFloat(custom[id])||0),0):0;
         share=custom&&rawTotal>0?(parseFloat(custom[filterMemberId])||0)/rawTotal*base:base/split.length;
       }
-      const date=new Date(exp.createdAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+      const date=fmtDate(exp.expenseDate||exp.createdAt);
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0 7px 20px;border-bottom:1px dashed var(--rule);font-size:12px;">
         <div><span>${esc(exp.itemName)}</span><span style="color:#aaa;font-size:11px;margin-left:6px">${date} · ${esc(exp.payerName)}</span></div>
         <span style="font-family:var(--mono);font-size:12px;color:#555;white-space:nowrap;margin-left:12px">${share!==null?formatAmt(share):"?"} ${ccy}</span>
@@ -1177,7 +1234,7 @@ function acName(val){
 function pickName(name){document.getElementById("join-name").value=name;hideAc("ac-names");}
 function hideAc(id){document.getElementById(id).style.display="none";}
 
-// ── RECEIPT SCAN ─────────────────────────────────────────
+// ── RECEIPT SCAN (single expense) ────────────────────────
 async function scanReceipt(input) {
   const file = input.files[0];
   if (!file) return;
@@ -1200,22 +1257,24 @@ async function scanReceipt(input) {
           role: "user",
           content: [
             { type: "image", source: { type: "base64", media_type: file.type, data: base64 } },
-            { type: "text", text: `You are an expense tracker assistant. Analyse this receipt and return ONLY a valid JSON object, no explanation, no markdown.
+            { type: "text", text: `You are an expense tracker. Analyse this receipt and return ONLY a valid JSON object, no explanation, no markdown. Do your best even if image quality is poor.
 
 {
   "itemName": "Vendor, Sub-category, DD Mon YYYY",
   "amount": 123.45,
   "currency": "HKD",
   "category": "Meals",
-  "notes": "key items summary"
+  "notes": "key items summary",
+  "expenseDate": "YYYY-MM-DD"
 }
 
 Rules:
-- itemName: 3 parts — (1) vendor name shortened, (2) ONE sub-category word e.g. Dinner, Lunch, Coffee, Drinks, Taxi, Stay, Ticket, Snacks, (3) date if visible. Max 40 chars. Example: "Mott 32, Dinner, 19 Apr"
-- amount: final total after tax/service/discounts
+- itemName: vendor name + ONE sub-category word (Dinner/Lunch/Coffee/Drinks/Taxi/Stay/Ticket/Snacks) + date if visible. Max 40 chars.
+- amount: final total. Estimate if blurry.
 - currency: 3-letter code. Default HKD if unclear.
 - category: ONE word from — Meals, Drinks, Transport, Accommodation, Entertainment, Shopping, Groceries, Health, Activities, Other
-- notes: key line items in one short line e.g. "2x steak, 1x wine, service 10%". Max 80 chars.` }
+- notes: key line items, max 80 chars. Empty string if nothing visible.
+- expenseDate: date from receipt in YYYY-MM-DD format. Use today if not visible.` }
           ]
         }]
       })
@@ -1225,6 +1284,7 @@ Rules:
     const parsed = JSON.parse(text);
     if (parsed.itemName) document.getElementById("exp-name").value = parsed.itemName;
     if (parsed.amount)   document.getElementById("exp-amount").value = parsed.amount;
+    if (parsed.expenseDate) document.getElementById("exp-date").value = parsed.expenseDate;
     if (parsed.currency) { const sel=document.getElementById("exp-currency"); sel.value=parsed.currency.toUpperCase(); onExpCurrencyChange(parsed.currency.toUpperCase()); }
     if (parsed.notes)    document.getElementById("exp-notes").value = parsed.notes;
     if (parsed.category) {
@@ -1245,46 +1305,15 @@ Rules:
   finally { document.getElementById("receipt-scanning").style.display="none"; }
 }
 
-// ── PAYMENT MODAL ─────────────────────────────────────────
-function openAddPaymentModal() {
-  if (!state.members.length) return toast("No members yet");
-  const opts = state.members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
-  document.getElementById("pay-from-modal").innerHTML = opts;
-  document.getElementById("pay-to-modal").innerHTML   = opts;
-  document.getElementById("pay-ccy-modal").textContent = state.currency;
-  document.getElementById("pay-amount-modal").value = "";
-  document.getElementById("pay-note-modal").value   = "";
-  if (state.members.length > 1) document.getElementById("pay-to-modal").selectedIndex = 1;
-  showModal("modal-payment");
-}
-
-async function savePaymentModal() {
-  const fromId   = document.getElementById("pay-from-modal").value;
-  const toId     = document.getElementById("pay-to-modal").value;
-  const amount   = parseFloat(document.getElementById("pay-amount-modal").value);
-  const note     = document.getElementById("pay-note-modal").value.trim();
-  if (fromId === toId) return toast("Payer and recipient must be different");
-  if (!amount || amount <= 0) return toast("Enter a valid amount");
-  const fromName = state.members.find(m=>m.memberId===fromId)?.name;
-  const toName   = state.members.find(m=>m.memberId===toId)?.name;
-  showLoading("Recording…");
-  try {
-    await api("addPayment",{projectId:state.projectId,fromId,fromName,toId,toName,amount,currency:state.currency,note});
-    const payRes = await api("getPayments",{projectId:state.projectId});
-    state.payments = payRes.payments || [];
-    closeModal("modal-payment");
-    toast(`${fromName} → ${toName}: ${formatAmt(amount)} ${state.currency} recorded ✓`);
-  } catch(e) { toast(e.message); } finally { hideLoading(); }
-}
-
 // ── IMPORT STATEMENT ─────────────────────────────────────
-let importPayerId = null, importPayerName = null, importRows = [];
+let importPayerId = null, importPayerName = null, importRows = [], importFileQueue = [];
 
 function openImportStatement() {
   if (!state.members.length) return toast("No members yet");
   const opts = state.members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
   document.getElementById("import-payer").innerHTML = opts;
   if (state.me) document.getElementById("import-payer").value = state.me.memberId;
+  document.getElementById("import-stmt-date").value = todayISO();
   document.getElementById("import-upload").value = "";
   document.getElementById("import-scanning").style.display = "none";
   importFileQueue = [];
@@ -1292,17 +1321,12 @@ function openImportStatement() {
   showModal("modal-import-step1");
 }
 
-let importFileQueue = []; // {file, dataUrl}
-
 function addImportFiles(input) {
   const files = [...input.files];
   input.value = "";
   files.forEach(file => {
     const reader = new FileReader();
-    reader.onload = e => {
-      importFileQueue.push({file, dataUrl: e.target.result});
-      renderImportQueue();
-    };
+    reader.onload = e => { importFileQueue.push({file, dataUrl: e.target.result}); renderImportQueue(); };
     reader.readAsDataURL(file);
   });
 }
@@ -1320,68 +1344,77 @@ function renderImportQueue() {
   btn.disabled = false; btn.style.opacity = "1";
 }
 
-async function scanOneImage(file) {
-  const base64 = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
-  const response = await fetch("/api/scan-receipt", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 2000,
-      messages: [{
-        role: "user",
-        content: [
-          {type:"image",source:{type:"base64",media_type:file.type,data:base64}},
-          {type:"text",text:`You are an expense tracker. Analyse this credit card statement or Apple Pay screenshot and extract ALL transactions.
-
-Return ONLY a valid JSON array, no explanation, no markdown:
-
-[
-  {"itemName":"Merchant Name, Category, DD Mon","amount":123.45,"currency":"HKD","category":"Meals","notes":""},
-  ...
-]
-
-Rules:
-- itemName: merchant name + ONE category word (Dinner/Lunch/Coffee/Drinks/Taxi/Stay/Ticket/Shopping/Groceries/Health/Other) + date if visible. Max 40 chars.
-- amount: positive number always (ignore refunds/credits)
-- currency: 3-letter code from statement. Default HKD if unclear.
-- category: one of — Meals, Drinks, Transport, Accommodation, Entertainment, Shopping, Groceries, Health, Activities, Other
-- notes: brief detail if visible, else empty string
-- Skip refunds, credits, payments, transfers
-- Include ALL purchase transactions visible`}
-        ]
-      }]
-    })
-  });
-  const data = await response.json();
-  const text = (data.content?.[0]?.text||"").replace(/```json|```/g,"").trim();
-  return JSON.parse(text);
-}
-
 async function runImportScan() {
   if (!importFileQueue.length) return toast("Add at least one screenshot first");
   const payerSel = document.getElementById("import-payer");
   importPayerId   = payerSel.value;
   importPayerName = payerSel.options[payerSel.selectedIndex].text;
+  const stmtDate  = document.getElementById("import-stmt-date").value;
   document.getElementById("import-scanning").style.display = "block";
   document.getElementById("import-scan-btn").disabled = true;
-  const msgEl = document.getElementById("import-scanning-msg");
-  let allRows = [];
+  document.getElementById("import-scanning-msg").textContent = "Scanning with AI…";
   try {
-    for (let i=0; i<importFileQueue.length; i++) {
-      msgEl.textContent = `Scanning image ${i+1} of ${importFileQueue.length}…`;
-      const parsed = await scanOneImage(importFileQueue[i].file);
-      if (Array.isArray(parsed)) allRows = allRows.concat(parsed);
-    }
-    if (!allRows.length) return toast("No transactions found — try clearer screenshots");
-    const stmtDate = document.getElementById("import-stmt-date").value;
-    importRows = allRows.map((r,i)=>({...r,id:i,deleted:false,splitMode:"all",splitMembers:state.members.map(m=>m.memberId),expenseDate:stmtDate}));
+    // Single API call with all images — credit efficient
+    const imageBlocks = await Promise.all(importFileQueue.map(async ({file}) => {
+      const base64 = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
+      return {type:"image",source:{type:"base64",media_type:file.type,data:base64}};
+    }));
+    const response = await fetch("/api/scan-receipt", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 2000,
+        messages: [{
+          role: "user",
+          content: [
+            ...imageBlocks,
+            {type:"text",text:`You are an expense tracker. Extract transactions from these credit card statement or Apple Pay screenshots. Do your best even if image quality is poor, blurry, or partial — extract what you can.
+
+Return ONLY a valid JSON array combining all transactions from all images. If you can read nothing at all, return [].
+
+[
+  {"itemName":"Merchant, Category, DD Mon","amount":123.45,"currency":"HKD","category":"Meals","notes":""},
+  ...
+]
+
+Rules:
+- Extract every transaction you can partially or fully read — do not skip unclear ones
+- itemName: merchant + ONE category word (Dinner/Lunch/Coffee/Drinks/Taxi/Stay/Ticket/Shopping/Groceries/Health/Other) + date if visible. Max 40 chars. Best guess if unclear.
+- amount: transaction amount. Estimate from visible digits if blurry.
+- currency: 3-letter code. Default HKD if unclear.
+- category: best guess from — Meals, Drinks, Transport, Accommodation, Entertainment, Shopping, Groceries, Health, Activities, Other
+- notes: any readable detail, partial ok, empty string if nothing
+- Only skip if clearly labeled as refund, credit, payment, or transfer
+- Deduplicate if same transaction appears in multiple images`}
+          ]
+        }]
+      })
+    });
+    const data = await response.json();
+    const text = (data.content?.[0]?.text||"").replace(/```json|```/g,"").trim();
+    const parsed = JSON.parse(text);
+    if (!Array.isArray(parsed)||!parsed.length) return toast("No transactions found — try clearer screenshots");
+    importRows = parsed.map((r,i)=>({...r,id:i,deleted:false,splitMembers:state.members.map(m=>m.memberId),expenseDate:stmtDate}));
     importFileQueue = [];
     closeModal("modal-import-step1");
     renderImportReview();
     showModal("modal-import-review");
   } catch(e) { toast("Could not read statement — try a clearer screenshot"); }
   finally { document.getElementById("import-scanning").style.display="none"; document.getElementById("import-scan-btn").disabled=false; document.getElementById("import-scan-btn").style.opacity="1"; }
+}
+
+// ── DUPLICATE DETECTION ───────────────────────────────────
+function findDuplicateExpense(row) {
+  // Flag if same amount + currency exists anywhere in project
+  const matches = state.expenses.filter(e =>
+    parseFloat(e.amount) === parseFloat(row.amount) &&
+    (e.currency||state.currency).toUpperCase() === (row.currency||state.currency).toUpperCase()
+  );
+  if (!matches.length) return null;
+  // Exact match (same name too) = stronger flag
+  const exact = matches.find(e => e.itemName && row.itemName && e.itemName.toLowerCase().includes(row.itemName.toLowerCase().split(",")[0]));
+  return exact || matches[0];
 }
 
 function renderImportReview() {
@@ -1393,15 +1426,27 @@ function renderImportReview() {
     if (row.deleted) return "";
     const needsFx = row.currency && row.currency !== state.currency;
     const savedRate = state.fxRates[row.currency] || "";
-    return `<div style="border:1.5px solid var(--rule);border-radius:6px;padding:12px;margin-bottom:8px;background:rgba(255,255,255,.7)">
+    const dup = findDuplicateExpense(row);
+    const dupWarning = dup
+      ? `<div style="background:var(--accent-lt);border-radius:4px;padding:8px;margin-bottom:8px;font-size:12px;color:var(--accent);border-left:3px solid var(--accent)">
+          ⚠️ <strong>Possible duplicate:</strong> "${esc(dup.itemName)}" — ${formatAmt(dup.amount)} ${dup.currency||state.currency} paid by ${esc(dup.payerName)} on ${fmtDate(dup.expenseDate||dup.createdAt)}
+          <button onclick="importRows[${i}].deleted=true;renderImportReview()" style="float:right;background:none;border:1px solid var(--accent);border-radius:3px;cursor:pointer;font-size:10px;padding:1px 6px;color:var(--accent);font-family:var(--sans)">Skip</button>
+        </div>`
+      : "";
+    return `<div style="border:1.5px solid ${dup?'var(--accent)':'var(--rule)'};border-radius:6px;padding:12px;margin-bottom:8px;background:rgba(255,255,255,.7)">
+      ${dupWarning}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <span style="font-size:11px;font-weight:500;letter-spacing:.06em;color:#aaa;text-transform:uppercase">Transaction ${i+1}</span>
         <button onclick="importRows[${i}].deleted=true;renderImportReview()" style="background:none;border:none;cursor:pointer;color:#bbb;font-size:16px;padding:0 4px;line-height:1" title="Remove">✕</button>
       </div>
       <div style="display:grid;gap:6px">
-        <input type="text" value="${esc(row.itemName)}" placeholder="Item name" style="font-size:13px;padding:6px 8px" onchange="importRows[${i}].itemName=this.value">
+        <input type="text" value="${esc(row.itemName||"")}" placeholder="Item name" style="font-size:13px;padding:6px 8px" onchange="importRows[${i}].itemName=this.value">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div><label style="margin-bottom:2px">Expense date</label><input type="date" value="${row.expenseDate||''}" style="font-size:12px;padding:6px 8px" onchange="importRows[${i}].expenseDate=this.value"></div>
+          <div></div>
+        </div>
         <div style="display:grid;grid-template-columns:1fr 90px 70px;gap:6px">
-          <input type="number" value="${row.amount}" min="0" step="0.01" style="font-size:13px;padding:6px 8px;text-align:right;font-family:var(--mono)" onchange="importRows[${i}].amount=parseFloat(this.value)||0;renderImportReview()">
+          <input type="number" value="${row.amount||''}" min="0" step="0.01" placeholder="Amount" style="font-size:13px;padding:6px 8px;text-align:right;font-family:var(--mono)" onchange="importRows[${i}].amount=parseFloat(this.value)||0;renderImportReview()">
           <select style="font-size:12px;padding:6px 4px" onchange="importRows[${i}].currency=this.value;renderImportReview()">
             ${["HKD","SGD","USD","EUR","GBP","JPY","AUD","CAD","CNY","THB","MYR"].map(c=>`<option${c===row.currency?" selected":""}>${c}</option>`).join("")}
           </select>
@@ -1413,7 +1458,7 @@ function renderImportReview() {
           <span style="font-size:10px;color:#aaa;white-space:nowrap">${savedRate?"(saved)":"(not set)"}</span>
         </div>` : ""}
         <div style="display:flex;gap:6px">
-          <select style="font-size:12px;padding:6px 8px;flex:1" onchange="importRows[${i}].category=this.value">${catOpts.replace(`value="${esc(row.category)}"`,`value="${esc(row.category)}" selected`)}</select>
+          <select style="font-size:12px;padding:6px 8px;flex:1" onchange="importRows[${i}].category=this.value">${catOpts.replace(`value="${esc(row.category||"")}"`,`value="${esc(row.category||"")}" selected`)}</select>
           <button type="button" onclick="importAddCategory(${i})" style="background:none;border:1.5px solid var(--rule);border-radius:4px;cursor:pointer;font-size:11px;padding:4px 8px;white-space:nowrap;color:#666;font-family:var(--sans)">+ New</button>
         </div>
         <input type="text" value="${esc(row.notes||"")}" placeholder="Notes (optional)" style="font-size:12px;padding:6px 8px" onchange="importRows[${i}].notes=this.value">
@@ -1438,7 +1483,6 @@ function toggleImportMember(rowIdx, memberId, checked) {
   if (!importRows[rowIdx].splitMembers) importRows[rowIdx].splitMembers = state.members.map(m=>m.memberId);
   if (checked) { if (!importRows[rowIdx].splitMembers.includes(memberId)) importRows[rowIdx].splitMembers.push(memberId); }
   else { importRows[rowIdx].splitMembers = importRows[rowIdx].splitMembers.filter(id=>id!==memberId); }
-  // Re-render just the chips for this row without full re-render (avoid losing focus)
   renderImportReview();
 }
 
@@ -1461,14 +1505,14 @@ async function saveImportedExpenses() {
   btn.disabled = true;
   let saved = 0;
   for (const row of active) {
-    const splitBetween = (row.splitMembers&&row.splitMembers.length)
-      ? row.splitMembers
-      : state.members.map(m=>m.memberId);
+    const splitBetween = (row.splitMembers&&row.splitMembers.length) ? row.splitMembers : state.members.map(m=>m.memberId);
     if (row.fxRate && row.currency && row.currency !== state.currency) {
       try { await api("setFxRate",{projectId:state.projectId,currency:row.currency,rate:row.fxRate}); state.fxRates[row.currency]=row.fxRate; } catch(e){}
     }
     try {
-      await api("addExpense",{projectId:state.projectId,itemName:row.itemName,amount:row.amount,currency:row.currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:row.category||"",notes:row.notes||"",customSplits:""});
+      const logDate = todayISO();
+      const expenseDate = row.expenseDate || logDate;
+      await api("addExpense",{projectId:state.projectId,itemName:row.itemName,amount:row.amount,currency:row.currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:row.category||"",notes:row.notes||"",customSplits:"",expenseDate,logDate});
       saved++;
       btn.textContent = `Importing ${saved}/${active.length}…`;
     } catch(e) { toast("Error on: "+row.itemName); }
