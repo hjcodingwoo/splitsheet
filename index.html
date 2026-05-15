@@ -392,7 +392,7 @@
     <div class="grid gap-4">
       <div class="grid grid-cols-2 gap-3">
         <div><label>Who paid this card?</label><select id="import-payer"></select></div>
-        <div><label>Statement date</label><input id="import-stmt-date" type="date"></div>
+        <div><label>Import date</label><input id="import-stmt-date" type="date"></div>
       </div>
       <div>
         <label>Screenshots <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#bbb;font-size:11px">(add one or more)</span></label>
@@ -416,7 +416,7 @@
 </div>
 
 <!-- IMPORT STEP 2: REVIEW -->
-<div id="modal-import-review" class="modal-bg hidden" onclick="closeIfBg(event,'modal-import-review')">
+<div id="modal-import-review" class="modal-bg hidden" onclick="">
   <div class="modal" style="max-width:640px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
       <h2 style="font-family:var(--serif);font-size:1.5rem">Review transactions</h2>
@@ -1386,7 +1386,8 @@ Rules:
 - category: best guess from — Meals, Drinks, Transport, Accommodation, Entertainment, Shopping, Groceries, Health, Activities, Other
 - notes: any readable detail, partial ok, empty string if nothing
 - Only skip if clearly labeled as refund, credit, payment, or transfer
-- Deduplicate if same transaction appears in multiple images`}
+- Deduplicate if same transaction appears in multiple images
+- expenseDate: extract the transaction date in YYYY-MM-DD format. If year not shown assume 2025. Leave empty string if no date visible.`}
           ]
         }]
       })
@@ -1395,7 +1396,7 @@ Rules:
     const text = (data.content?.[0]?.text||"").replace(/```json|```/g,"").trim();
     const parsed = JSON.parse(text);
     if (!Array.isArray(parsed)||!parsed.length) return toast("No transactions found — try clearer screenshots");
-    importRows = parsed.map((r,i)=>({...r,id:i,deleted:false,splitMembers:state.members.map(m=>m.memberId),expenseDate:stmtDate}));
+    importRows = parsed.map((r,i)=>({...r,id:i,deleted:false,splitMembers:state.members.map(m=>m.memberId),expenseDate:r.expenseDate||stmtDate}));
     importFileQueue = [];
     closeModal("modal-import-step1");
     renderImportReview();
@@ -1430,7 +1431,7 @@ function renderImportReview() {
     const dupWarning = dup
       ? `<div style="background:var(--accent-lt);border-radius:4px;padding:8px;margin-bottom:8px;font-size:12px;color:var(--accent);border-left:3px solid var(--accent)">
           ⚠️ <strong>Possible duplicate:</strong> "${esc(dup.itemName)}" — ${formatAmt(dup.amount)} ${dup.currency||state.currency} paid by ${esc(dup.payerName)} on ${fmtDate(dup.expenseDate||dup.createdAt)}
-          <button onclick="importRows[${i}].deleted=true;renderImportReview()" style="float:right;background:none;border:1px solid var(--accent);border-radius:3px;cursor:pointer;font-size:10px;padding:1px 6px;color:var(--accent);font-family:var(--sans)">Skip</button>
+          <button onclick="importRows[${i}].deleted=true;renderImportReview()" style="float:right;background:none;border:1px solid var(--accent);border-radius:3px;cursor:pointer;font-size:10px;padding:1px 6px;color:var(--accent);font-family:var(--sans)">Remove duplicate</button>
         </div>`
       : "";
     return `<div style="border:1.5px solid ${dup?'var(--accent)':'var(--rule)'};border-radius:6px;padding:12px;margin-bottom:8px;background:rgba(255,255,255,.7)">
@@ -1438,6 +1439,7 @@ function renderImportReview() {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <span style="font-size:11px;font-weight:500;letter-spacing:.06em;color:#aaa;text-transform:uppercase">Transaction ${i+1}</span>
         <button onclick="importRows[${i}].deleted=true;renderImportReview()" style="background:none;border:none;cursor:pointer;color:#bbb;font-size:16px;padding:0 4px;line-height:1" title="Remove">✕</button>
+        ${row.saved?`<span style="font-size:11px;color:var(--green);font-family:var(--mono)">✓ saved</span>`:`<button onclick="saveSingleImportRow(${i})" style="background:var(--green);border:none;border-radius:3px;cursor:pointer;font-size:11px;padding:3px 8px;color:#fff;font-family:var(--sans);white-space:nowrap">Save & add</button>`}
       </div>
       <div style="display:grid;gap:6px">
         <input type="text" value="${esc(row.itemName||"")}" placeholder="Item name" style="font-size:13px;padding:6px 8px" onchange="importRows[${i}].itemName=this.value">
@@ -1525,8 +1527,27 @@ async function saveImportedExpenses() {
   btn.disabled = false;
 }
 
-// ── CORE UTILS ───────────────────────────────────────────
-function v(id){return document.getElementById(id).value;}
+async function saveSingleImportRow(i) {
+  const row = importRows[i];
+  if (!row||row.deleted||row.saved) return;
+  const splitBetween = (row.splitMembers&&row.splitMembers.length) ? row.splitMembers : state.members.map(m=>m.memberId);
+  if (row.fxRate && row.currency && row.currency !== state.currency) {
+    try { await api("setFxRate",{projectId:state.projectId,currency:row.currency,rate:row.fxRate}); state.fxRates[row.currency]=row.fxRate; } catch(e){}
+  }
+  try {
+    const logDate = todayISO();
+    const expenseDate = row.expenseDate || logDate;
+    await api("addExpense",{projectId:state.projectId,itemName:row.itemName,amount:row.amount,currency:row.currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:row.category||"",notes:row.notes||"",customSplits:"",expenseDate,logDate});
+    importRows[i].saved = true;
+    const expRes = await api("getExpenses",{projectId:state.projectId});
+    state.expenses = expRes.expenses;
+    renderExpenses();
+    renderImportReview();
+    toast(`Saved: ${row.itemName} ✓`);
+  } catch(e) { toast("Error: "+e.message); }
+}
+
+// ── CORE UTILS ───────────────────────────────────────────function v(id){return document.getElementById(id).value;}
 function show(id){document.getElementById(id).classList.remove("hidden");}
 function hide(id){document.getElementById(id).classList.add("hidden");}
 function showModal(id){document.getElementById(id).classList.remove("hidden");}
