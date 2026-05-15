@@ -1400,6 +1400,8 @@ Rules:
     const data = await response.json();
     if (data.error) throw new Error(data.error);
     const rawText = (data.content?.[0]?.text||"");
+    console.log("RAW AI RESPONSE:", rawText);
+    toast("DEBUG: "+rawText.substring(0,80));
     const jsonMatch = rawText.match(/\[[\s\S]*\]/);
     if (!jsonMatch) throw new Error("no_transactions");
     let parsed;
