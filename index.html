@@ -1399,9 +1399,13 @@ Rules:
     if (!response.ok) throw new Error(`API error ${response.status}`);
     const data = await response.json();
     if (data.error) throw new Error(data.error);
-    const rawText = (data.content?.[0]?.text||"");
+    // Handle both {content:[{text:"..."}]} and direct string response
+    let rawText = "";
+    if (data.content && data.content[0] && data.content[0].text) rawText = data.content[0].text;
+    else if (typeof data === "string") rawText = data;
+    else rawText = JSON.stringify(data);
     console.log("RAW AI RESPONSE:", rawText);
-    toast("DEBUG: "+rawText.substring(0,80));
+    // Extract JSON array from anywhere in response
     const jsonMatch = rawText.match(/\[[\s\S]*\]/);
     if (!jsonMatch) throw new Error("no_transactions");
     let parsed;
