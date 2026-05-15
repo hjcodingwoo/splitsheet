@@ -1547,7 +1547,8 @@ async function saveSingleImportRow(i) {
   } catch(e) { toast("Error: "+e.message); }
 }
 
-// ── CORE UTILS ───────────────────────────────────────────function v(id){return document.getElementById(id).value;}
+// ── CORE UTILS ───────────────────────────────────────────
+function v(id){return document.getElementById(id).value;}
 function show(id){document.getElementById(id).classList.remove("hidden");}
 function hide(id){document.getElementById(id).classList.add("hidden");}
 function showModal(id){document.getElementById(id).classList.remove("hidden");}
