@@ -100,6 +100,7 @@
       <p class="text-sm text-gray-500 mt-2">Shared expenses. Zero fuss.<br>No accounts. No drama.</p>
       <div class="mt-3 flex gap-2 justify-center">
         <button class="btn btn-secondary" onclick="showDirectory()">View all projects →</button>
+        <button onclick="promptAdminLogin()" style="font-size:12px;padding:6px 14px;border-radius:4px;border:1px solid var(--rule);background:#fff;cursor:pointer;color:#888;font-family:var(--sans)">Admin</button>
         <button class="btn btn-ghost" onclick="showGuide()">? Guide</button>
       </div>
     </div>
@@ -232,7 +233,7 @@
             <div id="batch-split-rem" style="display:flex;flex-wrap:wrap;gap:4px"></div>
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px">
+        <div id="batch-project-row" style="display:none;align-items:center;gap:8px">
           <span style="font-size:11px;color:#888;width:90px;flex-shrink:0">Move to project:</span>
           <select id="batch-project" style="flex:1;padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px;background:#fff"><option value="">— stay here —</option></select>
         </div>
@@ -531,6 +532,7 @@ let state = {
   fxRates:{}, categories:[], me:null, currency:"USD", totalsFilter:"all", payments:[],
 };
 let editingExpenseId = null;
+let isAdmin = (sessionStorage.getItem("sc_admin")==="1");
 let splitMode = "equal";
 let allProjectsCache = [];
 
@@ -690,6 +692,7 @@ function toggleBatchMode() {
     const projs = (allProjectsCache||[]).filter(p=>!p.archived&&p.projectId!==state.projectId);
     const projOpts = `<option value="">— stay here —</option>`+projs.map(p=>`<option value="${p.projectId}">${esc(p.name)}</option>`).join("");
     document.getElementById("batch-project").innerHTML = projOpts;
+    document.getElementById("batch-project-row").style.display = isAdmin ? "flex" : "none";
   }
   renderExpenses();
   document.getElementById("batch-bar").style.display = batchSelectMode ? "flex" : "none";
@@ -860,7 +863,7 @@ function openEditExpense(expenseId) {
   const moveRow = document.getElementById("move-project-row");
   const moveSel = document.getElementById("move-project-sel");
   const otherProjs = (allProjectsCache||[]).filter(p=>!p.archived&&p.projectId!==state.projectId);
-  if (otherProjs.length) {
+  if (isAdmin && otherProjs.length) {
     moveSel.innerHTML = `<option value="">— stay in ${esc(state.project.name)} —</option>`+otherProjs.map(p=>`<option value="${p.projectId}">${esc(p.name)}</option>`).join("");
     moveRow.style.display = "flex";
   } else {
@@ -1329,6 +1332,21 @@ function switchTab(name,btn){
 }
 
 // ── DIRECTORY ────────────────────────────────────────────
+function promptAdminLogin() {
+  const pw = prompt("Admin access code:");
+  if (!pw) return;
+  if (pw === "sfg") {
+    isAdmin = true;
+    sessionStorage.setItem("sc_admin","1");
+    toast("Admin mode on ✓");
+    renderExpenses();
+  } else {
+    isAdmin = false;
+    sessionStorage.removeItem("sc_admin");
+    toast("Wrong code");
+  }
+}
+
 async function showDirectory(){
   const code=prompt("Enter access code:");
   if(code!=="sfg") return toast("Incorrect code");
