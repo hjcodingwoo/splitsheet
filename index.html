@@ -1582,6 +1582,7 @@ function renderImportReview() {
           <button type="button" onclick="importAddCategory(${i})" style="background:none;border:1.5px solid var(--rule);border-radius:4px;cursor:pointer;font-size:11px;padding:4px 8px;white-space:nowrap;color:#666;font-family:var(--sans)">+ New</button>
         </div>
         <input type="text" value="${esc(row.notes||"")}" placeholder="Notes (optional)" style="font-size:12px;padding:6px 8px" onchange="importRows[${i}].notes=this.value">
+        ${row.saved ? `<div style="text-align:center;padding:8px;background:#f0faf0;border-radius:4px;font-size:12px;color:#4a9;font-weight:500">✓ Saved</div>` : `<button type="button" onclick="saveOneImportRow(${i})" style="width:100%;padding:8px;background:var(--ink);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-family:var(--sans);font-weight:500">Save &amp; next ↓</button>`}
         <div>
           <div style="font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#888;margin-bottom:5px">Split between</div>
           <div style="display:flex;flex-wrap:wrap;gap:5px">
@@ -1616,6 +1617,40 @@ async function importAddCategory(rowIdx) {
     renderImportReview();
     toast("Category added: "+res.name);
   } catch(e) { toast(e.message); }
+}
+
+async function saveOneImportRow(i) {
+  const row = importRows[i];
+  if (!row || row.saved) return;
+  const splitBetween = (row.splitMembers&&row.splitMembers.length) ? row.splitMembers : state.members.map(m=>m.memberId);
+  if (row.fxRate && row.currency && row.currency !== state.currency) {
+    try { await api("setFxRate",{projectId:state.projectId,currency:row.currency,rate:row.fxRate}); state.fxRates[row.currency]=row.fxRate; } catch(e){}
+  }
+  try {
+    const logDate = todayISO();
+    const expenseDate = row.expenseDate || logDate;
+    await api("addExpense",{projectId:state.projectId,itemName:row.itemName,amount:row.amount,currency:row.currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:row.category||"",notes:row.notes||"",customSplits:"",expenseDate,logDate});
+    importRows[i].saved = true;
+    const expRes = await api("getExpenses",{projectId:state.projectId});
+    state.expenses = expRes.expenses; renderExpenses();
+    toast(row.itemName+" saved ✓");
+    renderImportReview();
+    // Scroll to next unsaved row
+    const next = importRows.findIndex((r,j)=>j>i&&!r.deleted&&!r.saved);
+    if (next>=0) {
+      setTimeout(()=>{
+        const allCards = document.querySelectorAll("#import-review-list > div");
+        let visIdx=0;
+        for (let k=0;k<importRows.length;k++) {
+          if (importRows[k].deleted) continue;
+          if (k===next) { allCards[visIdx]&&allCards[visIdx].scrollIntoView({behavior:"smooth",block:"start"}); break; }
+          visIdx++;
+        }
+      },100);
+    } else {
+      closeModal("modal-import-review"); toast("All expenses imported ✓");
+    }
+  } catch(e) { toast("Error: "+e.message); }
 }
 
 async function saveImportedExpenses() {
