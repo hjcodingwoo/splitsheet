@@ -417,7 +417,7 @@
 </div>
 
 <!-- IMPORT STEP 2: REVIEW -->
-<div id="modal-import-review" class="modal-bg hidden" onclick="closeIfBg(event,'modal-import-review')">
+<div id="modal-import-review" class="modal-bg hidden">
   <div class="modal" style="max-width:640px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
       <h2 style="font-family:var(--serif);font-size:1.5rem">Review transactions</h2>
@@ -1526,11 +1526,16 @@ async function runImportScan() {
 
 // ── DUPLICATE DETECTION ───────────────────────────────────
 function findDuplicateExpense(row) {
-  // Flag if same amount + currency exists anywhere in project
-  const matches = state.expenses.filter(e =>
-    parseFloat(e.amount) === parseFloat(row.amount) &&
-    (e.currency||state.currency).toUpperCase() === (row.currency||state.currency).toUpperCase()
-  );
+  // Only flag if same amount + currency + (same merchant name OR same date)
+  const rowName = (row.itemName||"").toLowerCase().substring(0,15);
+  const rowDate = (row.expenseDate||"").substring(0,10);
+  const matches = state.expenses.filter(e => {
+    if (parseFloat(e.amount) !== parseFloat(row.amount)) return false;
+    if ((e.currency||state.currency).toUpperCase() !== (row.currency||state.currency).toUpperCase()) return false;
+    const eName = (e.itemName||"").toLowerCase().substring(0,15);
+    const eDate = (e.expenseDate||"").substring(0,10);
+    return eName === rowName || (rowDate && eDate && eDate === rowDate);
+  });
   if (!matches.length) return null;
   // Exact match (same name too) = stronger flag
   const exact = matches.find(e => e.itemName && row.itemName && e.itemName.toLowerCase().includes(row.itemName.toLowerCase().split(",")[0]));
@@ -1549,8 +1554,11 @@ function renderImportReview() {
     const dup = findDuplicateExpense(row);
     const dupWarning = dup
       ? `<div style="background:var(--accent-lt);border-radius:4px;padding:8px;margin-bottom:8px;font-size:12px;color:var(--accent);border-left:3px solid var(--accent)">
-          ⚠️ <strong>Possible duplicate:</strong> "${esc(dup.itemName)}" — ${formatAmt(dup.amount)} ${dup.currency||state.currency} paid by ${esc(dup.payerName)} on ${fmtDate(dup.expenseDate||dup.createdAt)}
-          <button onclick="importRows[${i}].deleted=true;renderImportReview()" style="float:right;background:none;border:1px solid var(--accent);border-radius:3px;cursor:pointer;font-size:10px;padding:1px 6px;color:var(--accent);font-family:var(--sans)">Skip</button>
+          ⚠️ <strong>Possible duplicate:</strong> "${esc(dup.itemName)}" — ${formatAmt(dup.amount)} ${dup.currency||state.currency} already saved on ${fmtDate(dup.expenseDate||dup.createdAt)}
+          <div style="display:flex;gap:6px;margin-top:6px">
+            <button onclick="saveOneImportRow(${i})" style="flex:1;background:var(--ink);color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:11px;padding:4px 8px;font-family:var(--sans)">Save anyway</button>
+            <button onclick="importRows[${i}].deleted=true;renderImportReview()" style="flex:1;background:none;border:1px solid var(--accent);border-radius:3px;cursor:pointer;font-size:11px;padding:4px 8px;color:var(--accent);font-family:var(--sans)">Don't save (it's a duplicate)</button>
+          </div>
         </div>`
       : "";
     return `<div style="border:1.5px solid ${dup?'var(--accent)':'var(--rule)'};border-radius:6px;padding:12px;margin-bottom:8px;background:rgba(255,255,255,.7)">
