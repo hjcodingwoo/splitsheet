@@ -503,6 +503,7 @@
 <div id="loading" style="position:fixed;inset:0;background:rgba(245,240,232,.75);z-index:200;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
   <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
     <div style="width:32px;height:32px;border:3px solid var(--rule);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;"></div>
+<div id="progress-bar-wrap" style="display:none;position:fixed;top:0;left:0;right:0;z-index:300;height:3px;background:rgba(0,0,0,.08)"><div id="progress-bar" style="height:3px;background:var(--accent);width:0%;transition:width .3s ease"></div></div>
     <div style="font-family:var(--mono);font-size:11px;color:#aaa" id="loading-msg">Loading…</div>
   </div>
 </div>
@@ -658,6 +659,11 @@ async function promptRenameProject() {
 let batchSelectMode = false;
 let batchSelected = new Set();
 
+function toggleBatchChk(el) {
+  el.classList.toggle("checked");
+  el.querySelector("input").checked = el.classList.contains("checked");
+}
+
 function toggleBatchMode() {
   batchSelectMode = !batchSelectMode;
   batchSelected.clear();
@@ -668,9 +674,9 @@ function toggleBatchMode() {
     const memberOpts = `<option value="">— no change —</option>`+state.members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
     document.getElementById("batch-payer").innerHTML = memberOpts;
     // Member checkboxes for split add/remove
-    const memberChks = state.members.map(m=>`<label class="check-item" data-id="${m.memberId}" onclick="this.classList.toggle('checked');this.querySelector('input').checked=this.classList.contains('checked')" style="font-size:11px;padding:3px 8px"><input type="checkbox" style="display:none">${esc(m.name)}</label>`).join("");
-    document.getElementById("batch-split-add").innerHTML = memberChks;
-    document.getElementById("batch-split-rem").innerHTML = memberChks;
+    const mkChks = (prefix) => state.members.map(m=>`<label class="check-item" data-id="${m.memberId}" onclick="toggleBatchChk(this)" style="font-size:11px;padding:3px 8px"><input type="checkbox" style="display:none">${esc(m.name)}</label>`).join("");
+    document.getElementById("batch-split-add").innerHTML = mkChks("add");
+    document.getElementById("batch-split-rem").innerHTML = mkChks("rem");
     // Project dropdown
     const projs = (allProjectsCache||[]).filter(p=>!p.archived&&p.projectId!==state.projectId);
     const projOpts = `<option value="">— stay here —</option>`+projs.map(p=>`<option value="${p.projectId}">${esc(p.name)}</option>`).join("");
@@ -713,7 +719,9 @@ async function applyBatchEdit() {
   const ids = [...batchSelected];
   showLoading(`Updating ${ids.length} expenses…`);
   try {
-    for (const expenseId of ids) {
+    for (let _pi=0; _pi<ids.length; _pi++) {
+      const expenseId = ids[_pi];
+      showProgress((_pi/ids.length)*100, `Saving ${_pi+1} of ${ids.length}…`);
       const exp = state.expenses.find(e=>e.expenseId===expenseId);
       if (!exp) continue;
       const payerSel = document.getElementById("batch-payer");
@@ -734,6 +742,7 @@ async function applyBatchEdit() {
           splitBetween:split});
       }
     }
+    showProgress(95, "Refreshing…");
     const expRes = await api("getExpenses",{projectId:state.projectId});
     state.expenses = expRes.expenses;
     batchSelected.clear(); batchSelectMode = false;
@@ -742,7 +751,7 @@ async function applyBatchEdit() {
     document.getElementById("batch-toggle-btn").textContent = "Select";
     toast(`${ids.length} expense${ids.length!==1?"s":""} updated ✓`);
   } catch(e) { toast(e.message); }
-  finally { hideLoading(); }
+  finally { hideProgress(); }
 }
 
 function renderExpenses() {
@@ -1905,6 +1914,22 @@ function showModal(id){document.getElementById(id).classList.remove("hidden");}
 function closeModal(id){document.getElementById(id).classList.add("hidden");}
 function closeIfBg(e,id){if(e.target.id===id)closeModal(id);}
 function showLoading(msg){document.getElementById("loading-msg").textContent=msg||"Loading…";document.getElementById("loading").style.display="flex";}
+function showProgress(pct,msg){
+  const wrap=document.getElementById("progress-bar-wrap");
+  const bar=document.getElementById("progress-bar");
+  if(!wrap||!bar) return;
+  wrap.style.display="block";
+  bar.style.width=Math.min(100,Math.max(0,pct))+"%";
+  if(msg) { try{document.getElementById("loading-msg").textContent=msg; document.getElementById("loading").style.display="flex";}catch(e){} }
+}
+function hideProgress(){
+  const wrap=document.getElementById("progress-bar-wrap");
+  const bar=document.getElementById("progress-bar");
+  if(!wrap||!bar) return;
+  bar.style.width="100%";
+  setTimeout(()=>{wrap.style.display="none";bar.style.width="0%";},300);
+  hideLoading();
+}
 function hideLoading(){document.getElementById("loading").style.display="none";}
 let _tt;
 function toast(msg){const el=document.getElementById("toast");el.textContent=msg;el.classList.add("show");clearTimeout(_tt);_tt=setTimeout(()=>el.classList.remove("show"),2800);}
