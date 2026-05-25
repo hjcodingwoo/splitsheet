@@ -189,6 +189,16 @@
   <div id="tab-expenses" class="px-4 pb-20" style="max-width:720px;margin:0 auto;">
     <div class="flex items-center justify-between py-4">
       <div style="font-family:var(--mono);font-size:11px;color:#aaa" id="exp-count"></div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
+        <span style="font-size:11px;color:#aaa">Base currency:</span>
+        <span id="proj-ccy-display" style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--ink)"></span>
+        <button onclick="openCurrencyEdit()" style="font-size:10px;padding:1px 6px;border:1px solid var(--rule);border-radius:3px;background:#fff;cursor:pointer;color:#888">Edit</button>
+        <div id="proj-ccy-edit" style="display:none;align-items:center;gap:4px">
+          <input id="proj-ccy-input" type="text" maxlength="3" style="width:50px;padding:2px 6px;font-size:12px;font-family:var(--mono);border:1px solid var(--rule);border-radius:3px;text-transform:uppercase">
+          <button onclick="saveProjectCurrency()" class="btn btn-primary" style="font-size:11px;padding:2px 8px">Save</button>
+          <button onclick="closeCurrencyEdit()" style="font-size:11px;padding:2px 8px;border:none;background:none;cursor:pointer;color:#aaa">✕</button>
+        </div>
+      </div>
       <div class="flex gap-1.5 flex-wrap justify-end">
         <button id="batch-toggle-btn" onclick="toggleBatchMode()" style="font-family:var(--sans);font-size:12px;font-weight:500;padding:6px 12px;border-radius:4px;border:1.5px solid var(--rule);background:#fff;cursor:pointer;white-space:nowrap">Select</button>
         <button onclick="openAddExpense()" style="font-family:var(--sans);font-size:12px;font-weight:500;padding:6px 12px;border-radius:4px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;white-space:nowrap">+ Add expense</button>
@@ -661,7 +671,6 @@ let batchSelected = new Set();
 
 function toggleBatchChk(el) {
   el.classList.toggle("checked");
-  el.querySelector("input").checked = el.classList.contains("checked");
 }
 
 function toggleBatchMode() {
@@ -674,7 +683,7 @@ function toggleBatchMode() {
     const memberOpts = `<option value="">— no change —</option>`+state.members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
     document.getElementById("batch-payer").innerHTML = memberOpts;
     // Member checkboxes for split add/remove
-    const mkChks = (prefix) => state.members.map(m=>`<label class="check-item" data-id="${m.memberId}" onclick="toggleBatchChk(this)" style="font-size:11px;padding:3px 8px"><input type="checkbox" style="display:none">${esc(m.name)}</label>`).join("");
+    const mkChks = (prefix) => state.members.map(m=>`<div class="check-item" data-id="${m.memberId}" onclick="toggleBatchChk(this)" style="font-size:11px;padding:3px 8px;cursor:pointer">${esc(m.name)}</div>`).join("");
     document.getElementById("batch-split-add").innerHTML = mkChks("add");
     document.getElementById("batch-split-rem").innerHTML = mkChks("rem");
     // Project dropdown
@@ -801,6 +810,7 @@ function renderExpenses() {
       </div>
     </div>`;
   }).join("");
+  const ccyDisp=document.getElementById('proj-ccy-display'); if(ccyDisp) ccyDisp.textContent=state.currency||'';
 }
 
 // ── EXPENSE MODAL ─────────────────────────────────────────
@@ -1814,6 +1824,29 @@ async function importAddCategory(rowIdx) {
   } catch(e) { toast(e.message); }
 }
 
+function openCurrencyEdit() {
+  document.getElementById("proj-ccy-input").value = state.currency||"";
+  document.getElementById("proj-ccy-edit").style.display = "flex";
+}
+function closeCurrencyEdit() {
+  document.getElementById("proj-ccy-edit").style.display = "none";
+}
+async function saveProjectCurrency() {
+  const ccy = document.getElementById("proj-ccy-input").value.trim().toUpperCase();
+  if (!ccy || ccy.length !== 3) return toast("Enter a valid 3-letter currency code e.g. HKD");
+  if (ccy === state.currency) { closeCurrencyEdit(); return; }
+  showLoading("Updating currency…");
+  try {
+    await api("updateProjectCurrency", {projectId:state.projectId, currency:ccy});
+    state.currency = ccy;
+    state.project.defaultCurrency = ccy;
+    closeCurrencyEdit();
+    renderExpenses();
+    toast("Currency updated to "+ccy+" ✓");
+  } catch(e) { toast(e.message); }
+  finally { hideLoading(); }
+}
+
 async function saveOneImportRow(i) {
   const row = importRows[i];
   if (!row || row.saved) return;
@@ -1885,15 +1918,18 @@ async function saveImportedExpenses() {
   const btn = document.getElementById("import-confirm-btn");
   btn.disabled = true;
   let saved = 0;
-  for (const row of active) {
-    const splitBetween = (row.splitMembers&&row.splitMembers.length) ? row.splitMembers : state.members.map(m=>m.memberId);
-    if (row.fxRate && row.currency && row.currency !== state.currency) {
-      try { await api("setFxRate",{projectId:state.projectId,currency:row.currency,rate:row.fxRate}); state.fxRates[row.currency]=row.fxRate; } catch(e){}
+  for (let _bi=0; _bi<active.length; _bi++) {
+    const row = active[_bi];
+    // Re-read from importRows to get any DOM edits user made
+    const liveRow = importRows.find(r=>r.id===row.id) || row;
+    const splitBetween = (liveRow.splitMembers&&liveRow.splitMembers.length) ? liveRow.splitMembers : state.members.map(m=>m.memberId);
+    if (liveRow.fxRate && liveRow.currency && liveRow.currency !== state.currency) {
+      try { await api("setFxRate",{projectId:state.projectId,currency:liveRow.currency,rate:liveRow.fxRate}); state.fxRates[liveRow.currency]=liveRow.fxRate; } catch(e){}
     }
     try {
       const logDate = todayISO();
-      const expenseDate = row.expenseDate || logDate;
-      await api("addExpense",{projectId:row.projectId||state.projectId,itemName:row.itemName,amount:row.amount,currency:row.currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:row.category||"",notes:row.notes||"",customSplits:"",expenseDate,logDate});
+      const expenseDate = liveRow.expenseDate || logDate;
+      await api("addExpense",{projectId:liveRow.projectId||state.projectId,itemName:liveRow.itemName,amount:liveRow.amount,currency:liveRow.currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:liveRow.category||"",notes:liveRow.notes||"",customSplits:"",expenseDate,logDate});
       saved++;
       btn.textContent = `Importing ${saved}/${active.length}…`;
     } catch(e) { toast("Error on: "+row.itemName); }
