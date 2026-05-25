@@ -195,6 +195,38 @@
         <button onclick="openAddPaymentModal()" style="font-family:var(--sans);font-size:12px;font-weight:500;padding:6px 12px;border-radius:4px;border:1.5px solid var(--rule);background:transparent;color:var(--ink);cursor:pointer;white-space:nowrap">+ Payment settled</button>
       </div>
     </div>
+    <!-- BATCH BAR -->
+    <div id="batch-bar" style="display:none;flex-direction:column;gap:8px;padding:12px;background:var(--cream);border-radius:6px;margin-bottom:8px;border:1.5px solid var(--rule)">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" onclick="toggleSelectAll()" style="width:14px;height:14px"> Select all</label>
+        <span id="batch-count" style="font-size:12px;color:#888;flex:1">None selected</span>
+        <button id="batch-apply-btn" onclick="applyBatchEdit()" class="btn btn-primary" style="font-size:12px;padding:4px 14px" disabled>Apply</button>
+      </div>
+      <div style="display:grid;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;color:#888;width:90px;flex-shrink:0">Category:</span>
+          <select id="batch-cat" style="flex:1;padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px;background:#fff"><option value="">— no change —</option></select>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;color:#888;width:90px;flex-shrink:0">Paid by:</span>
+          <select id="batch-payer" style="flex:1;padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px;background:#fff"><option value="">— no change —</option></select>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:100px">
+            <div style="font-size:11px;color:#888;margin-bottom:4px">Add to split:</div>
+            <div id="batch-split-add" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+          </div>
+          <div style="flex:1;min-width:100px">
+            <div style="font-size:11px;color:#888;margin-bottom:4px">Remove from split:</div>
+            <div id="batch-split-rem" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;color:#888;width:90px;flex-shrink:0">Move to project:</span>
+          <select id="batch-project" style="flex:1;padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px;background:#fff"><option value="">— stay here —</option></select>
+        </div>
+      </div>
+    </div>
     <div id="expense-list" class="card"><div class="text-sm text-gray-400 text-center py-8">No expenses yet.</div></div>
   </div>
 
@@ -277,6 +309,11 @@
   <div id="tab-members" class="hidden px-4 pb-20" style="max-width:720px;margin:0 auto;">
     <div class="py-4"><div style="font-family:var(--mono);font-size:11px;color:#aaa;margin-bottom:4px">MEMBERS</div></div>
     <div id="members-list" class="card mb-4"></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;padding:10px;background:var(--cream);border-radius:6px">
+        <span style="font-size:12px;color:#888;font-weight:500;white-space:nowrap">Project currency:</span>
+        <input id="project-currency-input" type="text" maxlength="3" placeholder="USD" style="width:60px;padding:4px 8px;font-size:13px;font-family:var(--mono);border:1px solid var(--rule);border-radius:4px;text-transform:uppercase">
+        <button onclick="saveProjectCurrency()" class="btn btn-primary" style="font-size:12px;padding:4px 12px">Save</button>
+      </div>
     <div class="card">
       <div style="font-family:var(--mono);font-size:11px;color:#aaa;margin-bottom:8px">MERGE MEMBERS</div>
       <div style="font-size:12px;color:#888;margin-bottom:12px">Combines two names into one. All expenses reassigned to "Keep".</div>
@@ -376,6 +413,10 @@
           <button class="btn btn-ghost text-xs" onclick="selectAllSplit()">All</button>
           <button class="btn btn-ghost text-xs" onclick="clearSplit()">None</button>
         </div>
+      </div>
+      <div id="move-project-row" style="display:none;align-items:center;gap:8px;padding:10px;background:var(--cream);border-radius:6px;margin-bottom:8px">
+        <span style="font-size:12px;color:#888;white-space:nowrap">Move to project:</span>
+        <select id="move-project-sel" style="flex:1;padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px;background:#fff"><option value="">— stay here —</option></select>
       </div>
       <div class="flex gap-3 pt-2">
         <button class="btn btn-secondary flex-1" onclick="closeModal('modal-expense')">Cancel</button>
@@ -613,6 +654,96 @@ async function promptRenameProject() {
 }
 
 // ── EXPENSES ──────────────────────────────────────────────
+let batchSelectMode = false;
+let batchSelected = new Set();
+
+function toggleBatchMode() {
+  batchSelectMode = !batchSelectMode;
+  batchSelected.clear();
+  if (batchSelectMode) {
+    // Populate dropdowns
+    const catOpts = `<option value="">— no change —</option>`+state.categories.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
+    document.getElementById("batch-cat").innerHTML = catOpts;
+    const memberOpts = `<option value="">— no change —</option>`+state.members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
+    document.getElementById("batch-payer").innerHTML = memberOpts;
+    // Member checkboxes for split add/remove
+    const memberChks = state.members.map(m=>`<label class="check-item" data-id="${m.memberId}" onclick="this.classList.toggle('checked');this.querySelector('input').checked=this.classList.contains('checked')" style="font-size:11px;padding:3px 8px"><input type="checkbox" style="display:none">${esc(m.name)}</label>`).join("");
+    document.getElementById("batch-split-add").innerHTML = memberChks;
+    document.getElementById("batch-split-rem").innerHTML = memberChks;
+    // Project dropdown
+    const projs = (allProjectsCache||[]).filter(p=>!p.archived&&p.projectId!==state.projectId);
+    const projOpts = `<option value="">— stay here —</option>`+projs.map(p=>`<option value="${p.projectId}">${esc(p.name)}</option>`).join("");
+    document.getElementById("batch-project").innerHTML = projOpts;
+  }
+  renderExpenses();
+  document.getElementById("batch-bar").style.display = batchSelectMode ? "flex" : "none";
+  document.getElementById("batch-toggle-btn").textContent = batchSelectMode ? "Cancel" : "Select";
+}
+
+function toggleBatchSelect(expenseId) {
+  if (batchSelected.has(expenseId)) batchSelected.delete(expenseId);
+  else batchSelected.add(expenseId);
+  renderExpenses();
+  updateBatchBar();
+}
+
+function toggleSelectAll() {
+  const sorted = [...state.expenses].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  if (batchSelected.size === sorted.length) batchSelected.clear();
+  else sorted.forEach(e=>batchSelected.add(e.expenseId));
+  renderExpenses();
+  updateBatchBar();
+}
+
+function updateBatchBar() {
+  const n = batchSelected.size;
+  document.getElementById("batch-count").textContent = n ? `${n} selected` : "None selected";
+  document.getElementById("batch-apply-btn").disabled = n === 0;
+}
+
+async function applyBatchEdit() {
+  if (!batchSelected.size) return toast("Select at least one expense");
+  const cat = document.getElementById("batch-cat").value;
+  const payerId = document.getElementById("batch-payer").value;
+  const addMemberIds = [...document.querySelectorAll("#batch-split-add .check-item.checked")].map(el=>el.dataset.id);
+  const remMemberIds = [...document.querySelectorAll("#batch-split-rem .check-item.checked")].map(el=>el.dataset.id);
+  const moveProjectId = document.getElementById("batch-project").value;
+  if (!cat && !payerId && !addMemberIds.length && !remMemberIds.length && !moveProjectId) return toast("Choose at least one field to change");
+  const ids = [...batchSelected];
+  showLoading(`Updating ${ids.length} expenses…`);
+  try {
+    for (const expenseId of ids) {
+      const exp = state.expenses.find(e=>e.expenseId===expenseId);
+      if (!exp) continue;
+      const payerSel = document.getElementById("batch-payer");
+      const payerName = payerId ? payerSel.options[payerSel.selectedIndex].text : exp.payerName;
+      let split = Array.isArray(exp.splitBetween) ? [...exp.splitBetween] : String(exp.splitBetween).split(",").filter(Boolean);
+      if (addMemberIds.length) split = [...new Set([...split, ...addMemberIds])];
+      if (remMemberIds.length) split = split.filter(id=>!remMemberIds.includes(id));
+      if (!split.length) split = [exp.payerId];
+      if (moveProjectId && moveProjectId !== state.projectId) {
+        // Move: add to new project, delete from current
+        const logDate = exp.logDate || todayISO();
+        await api("addExpense",{projectId:moveProjectId,itemName:exp.itemName,amount:exp.amount,currency:exp.currency,payerId:payerId||exp.payerId,payerName,splitBetween:split,category:cat||exp.category,notes:exp.notes,customSplits:exp.customSplits||"",expenseDate:exp.expenseDate||"",logDate});
+        await api("deleteExpense",{expenseId,projectId:state.projectId});
+      } else {
+        await api("editExpense",{expenseId,projectId:state.projectId,
+          category:cat||exp.category,
+          payerId:payerId||exp.payerId, payerName,
+          splitBetween:split});
+      }
+    }
+    const expRes = await api("getExpenses",{projectId:state.projectId});
+    state.expenses = expRes.expenses;
+    batchSelected.clear(); batchSelectMode = false;
+    renderExpenses();
+    document.getElementById("batch-bar").style.display = "none";
+    document.getElementById("batch-toggle-btn").textContent = "Select";
+    toast(`${ids.length} expense${ids.length!==1?"s":""} updated ✓`);
+  } catch(e) { toast(e.message); }
+  finally { hideLoading(); }
+}
+
 function renderExpenses() {
   const{expenses,members}=state;
   const list=document.getElementById("expense-list");
@@ -632,8 +763,10 @@ function renderExpenses() {
     const splitBadge=`<span style="font-family:var(--mono);font-size:9px;padding:1px 5px;border-radius:3px;margin-left:2px;background:${exp.customSplits?'var(--accent-lt)':'var(--cream)'};color:${exp.customSplits?'var(--accent)':'#888'}">${exp.customSplits?'custom':'equal'}</span>`;
     const expDateStr = exp.expenseDate ? fmtDate(exp.expenseDate) : fmtDate(exp.createdAt);
     const logDateStr = exp.logDate ? fmtDate(exp.logDate) : fmtDate(exp.createdAt);
-    return `<div class="expense-row">
-      <div>
+    const chk = batchSelectMode ? `<input type="checkbox" ${batchSelected.has(exp.expenseId)?"checked":""} onclick="toggleBatchSelect('${exp.expenseId}')" style="margin-right:8px;cursor:pointer;width:16px;height:16px;flex-shrink:0">` : "";
+    return `<div class="expense-row" style="${batchSelected.has(exp.expenseId)?'background:var(--cream);':''}">
+      ${chk}
+      <div style="flex:1;min-width:0">
         <div class="font-medium text-sm">${esc(exp.itemName)} ${catPill}</div>
         <div class="text-xs text-gray-400 mt-0.5">Paid by <strong>${esc(exp.payerName)}</strong>${isMine?' <span style="color:var(--accent)">· you</span>':''} · Split: ${esc(splitNames)} ${splitBadge}</div>
         ${noteLine}
@@ -649,12 +782,12 @@ function renderExpenses() {
           <span class="pill pill-currency">${exp.currency||state.currency}</span>
           ${convNote}
         </div>
-        <div style="display:flex;flex-direction:column;gap:2px;margin-top:2px">
+        ${!batchSelectMode?`<div style="display:flex;flex-direction:column;gap:2px;margin-top:2px">
           <button class="btn btn-ghost" style="padding:2px 5px;font-size:11px" onclick="openEditExpense('${exp.expenseId}')" title="Edit">✏️</button>
           <button class="btn btn-ghost" style="padding:2px 5px;" onclick="deleteExpense('${exp.expenseId}')" title="Delete">
             <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
           </button>
-        </div>
+        </div>`:""}
       </div>
     </div>`;
   }).join("");
@@ -666,6 +799,7 @@ function openAddExpense() {
   editingExpenseId=null;
   document.getElementById("exp-modal-title").textContent="New expense";
   document.getElementById("save-exp-btn").textContent="Save expense";
+  document.getElementById("move-project-row").style.display="none";
   document.getElementById("exp-name").value="";
   document.getElementById("exp-notes").value="";
   document.getElementById("exp-amount").value="";
@@ -700,6 +834,16 @@ function openEditExpense(expenseId) {
   document.getElementById("exp-logdate").value=exp.logDate||new Date(exp.createdAt).toISOString().split('T')[0];
   onExpCurrencyChange(exp.currency||state.currency);
   if (exp.customSplits) setSplitMode("custom"); else setSplitMode("equal");
+  // Show move-to-project only when editing
+  const moveRow = document.getElementById("move-project-row");
+  const moveSel = document.getElementById("move-project-sel");
+  const otherProjs = (allProjectsCache||[]).filter(p=>!p.archived&&p.projectId!==state.projectId);
+  if (otherProjs.length) {
+    moveSel.innerHTML = `<option value="">— stay in ${esc(state.project.name)} —</option>`+otherProjs.map(p=>`<option value="${p.projectId}">${esc(p.name)}</option>`).join("");
+    moveRow.style.display = "flex";
+  } else {
+    moveRow.style.display = "none";
+  }
   showModal("modal-expense");
 }
 
@@ -740,7 +884,15 @@ async function saveExpense() {
   if(currency!==state.currency&&fxVal) await maybeSaveFxFromExpense(currency,fxVal);
   try {
     if(editingExpenseId){
-      await api("editExpense",{expenseId:editingExpenseId,projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits:customSplits||"",expenseDate});
+      const moveToProject = document.getElementById("move-project-sel")?.value;
+      if (moveToProject && moveToProject !== state.projectId) {
+        // Move: add to new project then delete from current
+        const logDate = state.expenses.find(e=>e.expenseId===editingExpenseId)?.logDate || todayISO();
+        await api("addExpense",{projectId:moveToProject,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits:customSplits||"",expenseDate,logDate});
+        await api("deleteExpense",{expenseId:editingExpenseId,projectId:state.projectId});
+      } else {
+        await api("editExpense",{expenseId:editingExpenseId,projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits:customSplits||"",expenseDate});
+      }
     } else {
       const logDate=todayISO();
       await api("addExpense",{projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits,expenseDate,logDate});
