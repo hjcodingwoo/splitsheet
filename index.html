@@ -1345,62 +1345,59 @@ function renderImportQueue() {
   btn.disabled = false; btn.style.opacity = "1";
 }
 
-async function scanOneFile(file, idx, total, stmtDate) {
-  const msgEl = document.getElementById("import-scanning-msg");
-  msgEl.textContent = `Scanning file ${idx} of ${total}…`;
-  const ext = file.name.split(".").pop().toLowerCase();
-  let contentBlocks;
-
-  if (["csv"].includes(ext)) {
-    // CSV: read as plain text and send to AI
-    const text = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsText(file);});
-    contentBlocks = [{type:"text",text:`Bank statement CSV from "${file.name}":
-
-${text.substring(0,40000)}
-
-${IMPORT_PROMPT_TEXT}`}];
-
-  } else if (["xls","xlsx"].includes(ext)) {
-    // Excel: lazy-load SheetJS on demand, then parse to CSV
-    if (!window.XLSX) await new Promise((res,rej)=>{
-      const s=document.createElement("script");
-      s.src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
-      s.onload=res; s.onerror=rej; document.head.appendChild(s);
-    });
-    const ab = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsArrayBuffer(file);});
-    const wb = XLSX.read(ab, {type:"array"});
-    const csvText = wb.SheetNames.map(n=>XLSX.utils.sheet_to_csv(wb.Sheets[n])).join("\n\n");
-    contentBlocks = [{type:"text",text:`Bank statement Excel from "${file.name}":\n\n${csvText.substring(0,40000)}\n\n${IMPORT_PROMPT_TEXT}`}];
-
-    } else if (ext === "pdf") {
-    // PDF: send as document type (Anthropic native support)
-    const base64 = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
-    contentBlocks = [
-      {type:"document",source:{type:"base64",media_type:"application/pdf",data:base64}},
-      {type:"text",text:IMPORT_PROMPT_IMAGE}
-    ];
-
-  } else {
-    // Images (jpg, png, heic, webp, etc): send as image
-    const base64 = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
-    let mediaType = file.type;
-    if (!mediaType || mediaType==="application/octet-stream" || ["heic","heif"].includes(ext)) mediaType = "image/jpeg";
-    contentBlocks = [
-      {type:"image",source:{type:"base64",media_type:mediaType,data:base64}},
-      {type:"text",text:IMPORT_PROMPT_IMAGE}
-    ];
+// Parse Wise CSV directly — no AI needed, columns are structured
+function parseWiseCsv(text) {
+  const lines = text.trim().split("\n");
+  if (lines.length < 2) return null;
+  const headers = lines[0].split(",").map(h=>h.replace(/"/g,"").trim());
+  const nameCol   = headers.indexOf("Target name");
+  const amtCol    = headers.indexOf("Target amount (after fees)");
+  const ccyCol    = headers.indexOf("Target currency");
+  const dateCol   = headers.indexOf("Created on");
+  const catCol    = headers.indexOf("Category");
+  const statusCol = headers.indexOf("Status");
+  const dirCol    = headers.indexOf("Direction");
+  if (nameCol<0||amtCol<0||ccyCol<0) return null; // not a Wise CSV
+  const rows = [];
+  for (let i=1;i<lines.length;i++) {
+    // parse CSV row respecting quotes
+    const cols = []; let cur="", inQ=false;
+    for (const ch of lines[i]) {
+      if (ch==='"') { inQ=!inQ; }
+      else if (ch===","&&!inQ) { cols.push(cur.trim()); cur=""; }
+      else cur+=ch;
+    }
+    cols.push(cur.trim());
+    const status = (cols[statusCol]||"").replace(/"/g,"");
+    const dir    = (cols[dirCol]||"").replace(/"/g,"");
+    if (status!=="COMPLETED"||dir!=="OUT") continue;
+    const name   = (cols[nameCol]||"").replace(/"/g,"").trim();
+    const amt    = parseFloat((cols[amtCol]||"0").replace(/"/g,""));
+    const ccy    = (cols[ccyCol]||"SGD").replace(/"/g,"").trim();
+    const rawDate= (cols[dateCol]||"").replace(/"/g,"").trim();
+    const expDate= rawDate ? rawDate.substring(0,10) : "";
+    const cat    = (cols[catCol]||"").replace(/"/g,"").trim();
+    if (!name||!amt||amt<=0) continue;
+    // Map Wise category to app category
+    const catMap = {"Eating out":"Meals","Transport":"Transport","Shopping":"Shopping",
+      "Groceries":"Groceries","Entertainment":"Entertainment","Trips":"Accommodation",
+      "Bills":"Other","Family":"Other","Cash":"Other"};
+    const mappedCat = catMap[cat]||"Other";
+    const mon = expDate ? new Date(expDate).toLocaleDateString("en-GB",{day:"2-digit",month:"short"}) : "";
+    rows.push({itemName:`${name} ${mon}`.trim().substring(0,40), amount:amt, currency:ccy, category:mappedCat, notes:name, expenseDate:expDate});
   }
+  return rows.length ? rows : null;
+}
 
+async function callAI(contentBlocks) {
   const response = await fetch("/api/scan-receipt", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4000,
-      messages: [{role:"user",content:contentBlocks}]
-    })
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:4000,
+      messages:[{role:"user",content:contentBlocks}]})
   });
+  if (!response.ok) throw new Error(`API ${response.status}`);
   const data = await response.json();
+  if (data.error) throw new Error(data.error);
   const rawText = (data.content?.[0]?.text||"");
   const text = rawText.replace(/```json|```/g,"").trim();
   let parsed = [];
@@ -1409,6 +1406,53 @@ ${IMPORT_PROMPT_TEXT}`}];
     if (m) { try { parsed = JSON.parse(m[0]); } catch(e2) {} }
   }
   return Array.isArray(parsed) ? parsed : [];
+}
+
+async function scanOneFile(file, idx, total, stmtDate) {
+  const msgEl = document.getElementById("import-scanning-msg");
+  msgEl.textContent = `Scanning file ${idx} of ${total}…`;
+  const ext = file.name.split(".").pop().toLowerCase();
+
+  if (ext === "csv") {
+    // Parse CSV directly in browser — no AI, no size limits
+    const text = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsText(file);});
+    const direct = parseWiseCsv(text);
+    if (direct) return direct;
+    // Fallback to AI for non-Wise CSVs (trimmed to avoid size limit)
+    return await callAI([{type:"text",text:`Bank statement CSV:\n\n${text.substring(0,15000)}\n\n${IMPORT_PROMPT_TEXT}`}]);
+
+  } else if (["xls","xlsx"].includes(ext)) {
+    if (!window.XLSX) await new Promise((res,rej)=>{
+      const s=document.createElement("script");
+      s.src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+      s.onload=res; s.onerror=rej; document.head.appendChild(s);
+    });
+    const ab = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsArrayBuffer(file);});
+    const wb = XLSX.read(ab, {type:"array"});
+    const csvText = wb.SheetNames.map(n=>XLSX.utils.sheet_to_csv(wb.Sheets[n])).join("\n\n");
+    // Try direct parse first
+    const direct = parseWiseCsv(csvText);
+    if (direct) return direct;
+    return await callAI([{type:"text",text:`Bank statement Excel:\n\n${csvText.substring(0,15000)}\n\n${IMPORT_PROMPT_TEXT}`}]);
+
+  } else if (ext === "pdf") {
+    // PDF: send as image pages (scan-receipt proxy handles images, not documents)
+    const base64 = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
+    return await callAI([
+      {type:"text",text:"This is a bank/card statement PDF. "+IMPORT_PROMPT_TEXT},
+      {type:"document",source:{type:"base64",media_type:"application/pdf",data:base64}}
+    ]);
+
+  } else {
+    // Images
+    const base64 = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
+    let mediaType = file.type;
+    if (!mediaType||mediaType==="application/octet-stream"||["heic","heif"].includes(ext)) mediaType="image/jpeg";
+    return await callAI([
+      {type:"image",source:{type:"base64",media_type:mediaType,data:base64}},
+      {type:"text",text:IMPORT_PROMPT_IMAGE}
+    ]);
+  }
 }
 
 const IMPORT_PROMPT_IMAGE = `You are an expense tracker. Extract ALL transactions from this image. Do your best even if quality is poor — extract what you can.
