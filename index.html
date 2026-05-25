@@ -417,22 +417,22 @@
 </div>
 
 <!-- IMPORT STEP 2: REVIEW -->
-<div id="modal-import-review" class="modal-bg hidden">
-  <div class="modal" style="max-width:640px">
+<div id="modal-import-review" style="display:none;position:fixed;inset:0;background:var(--paper);z-index:200;overflow-y:auto;padding:20px 16px">
+  <div style="max-width:640px;margin:0 auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
       <h2 style="font-family:var(--serif);font-size:1.5rem">Review transactions</h2>
-      <button class="btn btn-ghost" onclick="closeModal('modal-import-review')">✕</button>
+      <button class="btn btn-ghost" onclick="document.getElementById("modal-import-review").style.display="none"">✕</button>
     </div>
     <div style="font-size:12px;color:#888;margin-bottom:16px">Edit, delete, or adjust splits before importing.</div>
     <div id="import-review-list" style="max-height:55vh;overflow-y:auto;margin-bottom:16px"></div>
     <div style="display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:1px solid var(--rule)">
       <div style="font-size:12px;color:#aaa" id="import-review-count"></div>
       <div class="flex gap-2">
-        <button class="btn btn-secondary" onclick="closeModal('modal-import-review')">Cancel</button>
+        <button class="btn btn-secondary" onclick="document.getElementById("modal-import-review").style.display="none"">Cancel</button>
         <button class="btn btn-primary" id="import-confirm-btn" onclick="saveImportedExpenses()">Import all</button>
       </div>
     </div>
-  </div>
+</div>
 </div>
 
 <!-- PAYMENT MODAL -->
@@ -1513,7 +1513,7 @@ async function runImportScan() {
     importFileQueue = [];
     closeModal("modal-import-step1");
     renderImportReview();
-    showModal("modal-import-review");
+    document.getElementById("modal-import-review").style.display="block";
   } catch(e) {
     console.error("Import scan error:", e);
     toast("Scan error: "+(e.message||"unknown"));
@@ -1630,13 +1630,28 @@ async function importAddCategory(rowIdx) {
 async function saveOneImportRow(i) {
   const row = importRows[i];
   if (!row || row.saved) return;
-  const splitBetween = (row.splitMembers&&row.splitMembers.length) ? row.splitMembers : state.members.map(m=>m.memberId);
+  // Read live DOM values — user may have edited fields without triggering onchange
+  const visIdx = importRows.slice(0,i).filter(r=>!r.deleted).length;
+  const cards = document.querySelectorAll("#import-review-list > div");
+  const card = cards[visIdx];
+  if (card) {
+    const inputs = card.querySelectorAll("input[type=text]");
+    if (inputs[0]?.value) importRows[i].itemName = inputs[0].value;
+    if (inputs[1]?.value !== undefined) importRows[i].notes = inputs[1].value;
+    const dateEl = card.querySelector("input[type=date]");
+    if (dateEl?.value) importRows[i].expenseDate = dateEl.value;
+    const amtEl = card.querySelector("input[type=number]");
+    if (amtEl?.value) importRows[i].amount = parseFloat(amtEl.value)||importRows[i].amount;
+    const selects = card.querySelectorAll("select");
+    if (selects[0]?.value) importRows[i].category = selects[0].value;
+  }
+  const splitBetween = (importRows[i].splitMembers?.length) ? importRows[i].splitMembers : state.members.map(m=>m.memberId);
   if (row.fxRate && row.currency && row.currency !== state.currency) {
     try { await api("setFxRate",{projectId:state.projectId,currency:row.currency,rate:row.fxRate}); state.fxRates[row.currency]=row.fxRate; } catch(e){}
   }
   try {
     const logDate = todayISO();
-    const expenseDate = row.expenseDate || logDate;
+    const expenseDate = importRows[i].expenseDate || logDate;
     await api("addExpense",{projectId:state.projectId,itemName:row.itemName,amount:row.amount,currency:row.currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:row.category||"",notes:row.notes||"",customSplits:"",expenseDate,logDate});
     importRows[i].saved = true;
     const expRes = await api("getExpenses",{projectId:state.projectId});
@@ -1656,7 +1671,7 @@ async function saveOneImportRow(i) {
         }
       },100);
     } else {
-      closeModal("modal-import-review"); toast("All expenses imported ✓");
+      document.getElementById("modal-import-review").style.display="none"; toast("All expenses imported ✓");
     }
   } catch(e) { toast("Error: "+e.message); }
 }
@@ -1665,7 +1680,7 @@ async function saveImportedExpenses() {
   const active = importRows.filter(r=>!r.deleted&&!r.saved);
   const alreadySaved = importRows.filter(r=>!r.deleted&&r.saved).length;
   if (!active.length) {
-    if (alreadySaved) { closeModal('modal-import-review'); toast(`${alreadySaved} expense${alreadySaved!==1?"s":""} already saved ✓`); return; }
+    if (alreadySaved) { document.getElementById("modal-import-review").style.display="none"; toast(`${alreadySaved} expense${alreadySaved!==1?"s":""} already saved ✓`); return; }
     return toast("No transactions to import");
   }
   const btn = document.getElementById("import-confirm-btn");
@@ -1687,7 +1702,7 @@ async function saveImportedExpenses() {
   const expRes = await api("getExpenses",{projectId:state.projectId});
   state.expenses = expRes.expenses;
   renderExpenses();
-  closeModal("modal-import-review");
+  document.getElementById("modal-import-review").style.display="none";
   toast(`${saved} expense${saved!==1?"s":""} imported ✓`);
   btn.disabled = false;
 }
