@@ -501,12 +501,24 @@ function apiOnce(action, params, cb) {
     all.callback = cb;
     const url = new URL(API_URL);
     for (const [k,val] of Object.entries(all)) if (val !== undefined && val !== null) url.searchParams.set(k, String(val));
-    window[cb] = (data) => { delete window[cb]; document.getElementById("jsonp-container").innerHTML=""; if(data.error) reject(new Error(data.error)); else resolve(data); };
-    const s = document.createElement("script");
-    s.src = url.toString();
-    s.onerror = () => { delete window[cb]; reject(new Error("Failed to reach server.")); };
-    document.getElementById("jsonp-container").appendChild(s);
-  });
+    fetch(url.toString())
+      .then(r => r.text())
+      .then(text => {
+        try {
+          const match = text.match(/^\w+\(([\s\S]*)\)$/);
+          if (match) {
+            const data = JSON.parse(match[1]);
+            if (data.error) reject(new Error(data.error));
+            else resolve(data);
+          } else {
+            reject(new Error("Invalid JSONP response"));
+          }
+        } catch (e) {
+          reject(e);
+        }
+      })
+      .catch(reject);
+  })
 }
 function api(action, params = {}, _retry = true) {
   const cb = "_cb_" + Date.now() + "_" + Math.random().toString(36).slice(2,6);
