@@ -190,6 +190,7 @@
     <div class="flex items-center justify-between py-4">
       <div style="font-family:var(--mono);font-size:11px;color:#aaa" id="exp-count"></div>
       <div class="flex gap-1.5 flex-wrap justify-end">
+        <button id="batch-toggle-btn" onclick="toggleBatchMode()" style="font-family:var(--sans);font-size:12px;font-weight:500;padding:6px 12px;border-radius:4px;border:1.5px solid var(--rule);background:#fff;cursor:pointer;white-space:nowrap">Select</button>
         <button onclick="openAddExpense()" style="font-family:var(--sans);font-size:12px;font-weight:500;padding:6px 12px;border-radius:4px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;white-space:nowrap">+ Add expense</button>
         <button onclick="openImportStatement()" style="font-family:var(--sans);font-size:12px;font-weight:500;padding:6px 12px;border-radius:4px;border:1.5px solid var(--green);background:var(--green);color:#fff;cursor:pointer;white-space:nowrap">+ Batch import</button>
         <button onclick="openAddPaymentModal()" style="font-family:var(--sans);font-size:12px;font-weight:500;padding:6px 12px;border-radius:4px;border:1.5px solid var(--rule);background:transparent;color:var(--ink);cursor:pointer;white-space:nowrap">+ Payment settled</button>
@@ -800,6 +801,8 @@ function openAddExpense() {
   document.getElementById("exp-modal-title").textContent="New expense";
   document.getElementById("save-exp-btn").textContent="Save expense";
   document.getElementById("move-project-row").style.display="none";
+  document.getElementById("exp-date").value=todayISO();
+  document.getElementById("exp-logdate").value=todayISO();
   document.getElementById("exp-name").value="";
   document.getElementById("exp-notes").value="";
   document.getElementById("exp-amount").value="";
@@ -891,7 +894,7 @@ async function saveExpense() {
         await api("addExpense",{projectId:moveToProject,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits:customSplits||"",expenseDate,logDate});
         await api("deleteExpense",{expenseId:editingExpenseId,projectId:state.projectId});
       } else {
-        await api("editExpense",{expenseId:editingExpenseId,projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits:customSplits||"",expenseDate});
+        const logDate=v("exp-logdate")||todayISO(); await api("editExpense",{expenseId:editingExpenseId,projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits:customSplits||"",expenseDate,logDate});
       }
     } else {
       const logDate=todayISO();
