@@ -470,7 +470,7 @@
 <div id="toast"></div>
 
 <script>
-const API_URL = "https://script.google.com/macros/s/AKfycbz7r7R0tAxzgDT7liIwxew6-3FpHmcsv9CRmBoNtJN6qSs7_0Ae_GwP74O3s08tcOcCEw/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbzi0BrDfXrWer20rc7K9_SprizpPC9q-wrcmWWS7jqd5aAP9gXP-6awc0y7Ch9fDqZv7g/exec";
 const PIE_COLORS = ["#c1440e","#2d6a4f","#4a7fbd","#b5860d","#7b4fa6","#c0704a","#3d8c6e","#6b8cba","#d4a520","#a06bc0","#e8856a","#56b08a"];
 
 let state = {
@@ -577,7 +577,7 @@ async function loadProject(projectId) {
     const expRes=await api("getExpenses",{projectId});
     const payRes=await api("getPayments",{projectId});
     state.projectId=projectId; state.project=projRes.project; state.members=projRes.members;
-    state.expenses=expRes.expenses; state.fxRates=projRes.fxRates||{}; state.categories=projRes.categories||[];
+    state.expenses=expRes.expenses; state.fxRates=projRes.fxRates||{}; state.categories=projRes.categories||[]; state.projects=allProjectsCache;
     state.currency=projRes.project.defaultCurrency||"USD"; state.payments=payRes.payments||[];
     state.me=loadLocalMe(projectId)||null;
     renderProject(); show("view-project"); hide("view-landing");
@@ -1569,6 +1569,7 @@ function renderImportReview() {
       </div>
       <div style="display:grid;gap:6px">
         <input type="text" value="${esc(row.itemName||"")}" placeholder="Item name" style="font-size:13px;padding:6px 8px" onchange="importRows[${i}].itemName=this.value">
+        <select onchange="importRows[${i}].projectId=this.value" style="font-size:11px;padding:4px 6px;color:#555;border:1px solid #ddd;border-radius:4px;background:#f9f9f9;width:100%">${projOpts}</select>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
           <div><label style="margin-bottom:2px">Expense date</label><input type="date" value="${row.expenseDate||''}" style="font-size:12px;padding:6px 8px" onchange="importRows[${i}].expenseDate=this.value"></div>
           <div></div>
@@ -1590,7 +1591,8 @@ function renderImportReview() {
           <button type="button" onclick="importAddCategory(${i})" style="background:none;border:1.5px solid var(--rule);border-radius:4px;cursor:pointer;font-size:11px;padding:4px 8px;white-space:nowrap;color:#666;font-family:var(--sans)">+ New</button>
         </div>
         <input type="text" value="${esc(row.notes||"")}" placeholder="Notes (optional)" style="font-size:12px;padding:6px 8px" onchange="importRows[${i}].notes=this.value">
-        ${row.saved ? `<div style="text-align:center;padding:8px;background:#f0faf0;border-radius:4px;font-size:12px;color:#4a9;font-weight:500">✓ Saved</div>` : `<button type="button" onclick="saveOneImportRow(${i})" style="width:100%;padding:8px;background:var(--ink);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-family:var(--sans);font-weight:500">Save &amp; next ↓</button>`}
+        ${(() => { const projOpts = state.projects ? state.projects.filter(p=>!p.archived).map(p=>`<option value="${esc(p.projectId)}" ${p.projectId===(row.projectId||state.projectId)?"selected":"")}>${esc(p.name)}</option>`).join("") : `<option value="${esc(state.projectId)}">${esc(state.projectId)}</option>`; return `<div style="margin-bottom:4px"><label style="font-size:11px;color:#888;font-weight:500;text-transform:uppercase;letter-spacing:.06em">Save to project</label><select onchange="importRows[${i}].projectId=this.value" style="width:100%;margin-top:3px;padding:5px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px;background:#fff">${projOpts}</select></div>`; })()}
+        ${row.saved ? `<div style="text-align:center;padding:8px;background:#f0faf0;border-radius:4px;font-size:12px;color:#4a9;font-weight:500">✓ Saved</div>` : `<button type="button" class="save-next-btn" onclick="saveOneImportRow(${i})" style="width:100%;padding:8px;background:var(--ink);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-family:var(--sans);font-weight:500">Save &amp; next ↓</button>`}
         <div>
           <div style="font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#888;margin-bottom:5px">Split between</div>
           <div style="display:flex;flex-wrap:wrap;gap:5px">
@@ -1630,7 +1632,7 @@ async function importAddCategory(rowIdx) {
 async function saveOneImportRow(i) {
   const row = importRows[i];
   if (!row || row.saved) return;
-  // Read live DOM values — user may have edited fields without triggering onchange
+  // Read live DOM values at save time
   const visIdx = importRows.slice(0,i).filter(r=>!r.deleted).length;
   const cards = document.querySelectorAll("#import-review-list > div");
   const card = cards[visIdx];
@@ -1644,36 +1646,48 @@ async function saveOneImportRow(i) {
     if (amtEl?.value) importRows[i].amount = parseFloat(amtEl.value)||importRows[i].amount;
     const selects = card.querySelectorAll("select");
     if (selects[0]?.value) importRows[i].category = selects[0].value;
+    if (selects[1]?.value) importRows[i].projectId = selects[1].value;
   }
+  // Show saving feedback immediately
+  const btn = card?.querySelector(".save-next-btn");
+  if (btn) { btn.textContent="Saving…"; btn.disabled=true; }
+  const targetProjectId = importRows[i].projectId || state.projectId;
   const splitBetween = (importRows[i].splitMembers?.length) ? importRows[i].splitMembers : state.members.map(m=>m.memberId);
   if (row.fxRate && row.currency && row.currency !== state.currency) {
-    try { await api("setFxRate",{projectId:state.projectId,currency:row.currency,rate:row.fxRate}); state.fxRates[row.currency]=row.fxRate; } catch(e){}
+    try { await api("setFxRate",{projectId:targetProjectId,currency:row.currency,rate:row.fxRate}); state.fxRates[row.currency]=row.fxRate; } catch(e){}
   }
   try {
     const logDate = todayISO();
     const expenseDate = importRows[i].expenseDate || logDate;
-    await api("addExpense",{projectId:state.projectId,itemName:row.itemName,amount:row.amount,currency:row.currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:row.category||"",notes:row.notes||"",customSplits:"",expenseDate,logDate});
+    await api("addExpense",{projectId:targetProjectId,itemName:importRows[i].itemName,amount:importRows[i].amount,currency:importRows[i].currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:importRows[i].category||"",notes:importRows[i].notes||"",customSplits:"",expenseDate,logDate});
     importRows[i].saved = true;
-    const expRes = await api("getExpenses",{projectId:state.projectId});
-    state.expenses = expRes.expenses; renderExpenses();
-    toast(row.itemName+" saved ✓");
+    // Refresh expenses only if saved to current project
+    if (targetProjectId === state.projectId) {
+      const expRes = await api("getExpenses",{projectId:state.projectId});
+      state.expenses = expRes.expenses; renderExpenses();
+    }
+    toast(importRows[i].itemName+" saved ✓");
     renderImportReview();
     // Scroll to next unsaved row
     const next = importRows.findIndex((r,j)=>j>i&&!r.deleted&&!r.saved);
     if (next>=0) {
       setTimeout(()=>{
         const allCards = document.querySelectorAll("#import-review-list > div");
-        let visIdx=0;
+        let nvis=0;
         for (let k=0;k<importRows.length;k++) {
           if (importRows[k].deleted) continue;
-          if (k===next) { allCards[visIdx]&&allCards[visIdx].scrollIntoView({behavior:"smooth",block:"start"}); break; }
-          visIdx++;
+          if (k===next) { allCards[nvis]?.scrollIntoView({behavior:"smooth",block:"start"}); break; }
+          nvis++;
         }
-      },100);
+      },80);
     } else {
-      document.getElementById("modal-import-review").style.display="none"; toast("All expenses imported ✓");
+      document.getElementById("modal-import-review").style.display="none";
+      toast("All expenses imported ✓");
     }
-  } catch(e) { toast("Error: "+e.message); }
+  } catch(e) {
+    if (btn) { btn.textContent="Save & next ↓"; btn.disabled=false; }
+    toast("Error: "+e.message);
+  }
 }
 
 async function saveImportedExpenses() {
@@ -1694,7 +1708,7 @@ async function saveImportedExpenses() {
     try {
       const logDate = todayISO();
       const expenseDate = row.expenseDate || logDate;
-      await api("addExpense",{projectId:state.projectId,itemName:row.itemName,amount:row.amount,currency:row.currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:row.category||"",notes:row.notes||"",customSplits:"",expenseDate,logDate});
+      await api("addExpense",{projectId:row.projectId||state.projectId,itemName:row.itemName,amount:row.amount,currency:row.currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:row.category||"",notes:row.notes||"",customSplits:"",expenseDate,logDate});
       saved++;
       btn.textContent = `Importing ${saved}/${active.length}…`;
     } catch(e) { toast("Error on: "+row.itemName); }
