@@ -389,7 +389,7 @@
 <div id="modal-import-step1" class="modal-bg hidden" onclick="closeIfBg(event,'modal-import-step1')">
   <div class="modal" style="max-width:420px">
     <h2 style="font-family:var(--serif);font-size:1.5rem;margin-bottom:8px">Import statement</h2>
-    <div style="font-size:12px;color:#888;margin-bottom:20px">Upload screenshots of your credit card statement or Apple Pay wallet. Claude will extract all transactions.</div>
+    <div style="font-size:12px;color:#888;margin-bottom:20px">Upload screenshots, PDFs, CSV or Excel exports from your bank or credit card. Claude will extract all transactions.</div>
     <div class="grid gap-4">
       <div class="grid grid-cols-2 gap-3">
         <div><label>Who paid this card?</label><select id="import-payer"></select></div>
@@ -400,7 +400,7 @@
         <input type="file" id="import-upload" accept="image/*,.heic,.heif,.pdf,.csv,.xlsx,.xls" multiple style="display:none" onchange="addImportFiles(this)">
         <button class="btn btn-secondary w-full" type="button" onclick="document.getElementById('import-upload').click()" style="justify-content:center;gap:10px;padding:16px;border-style:dashed;color:#888;border-color:var(--rule)">
           <span style="font-size:18px">📷</span>
-          <span style="font-size:13px;color:var(--ink);font-weight:500">Add screenshots</span>
+          <span style="font-size:13px;color:var(--ink);font-weight:500">Add files</span>
         </button>
         <div id="import-file-queue" style="display:none;margin-top:8px;flex-wrap:wrap;gap:6px;flex-direction:row"></div>
       </div>
@@ -1354,11 +1354,11 @@ async function scanOneFile(file, idx, total, stmtDate) {
   if (["csv"].includes(ext)) {
     // CSV: read as plain text and send to AI
     const text = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsText(file);});
-    contentBlocks = [{type:"text",text:`Bank statement CSV from file "${file.name}":
+    contentBlocks = [{type:"text",text:`Bank statement CSV from "${file.name}":
 
 ${text.substring(0,40000)}
 
-${IMPORT_PROMPT}`}];
+${IMPORT_PROMPT_TEXT}`}];
 
   } else if (["xls","xlsx"].includes(ext)) {
     // Excel: lazy-load SheetJS on demand, then parse to CSV
@@ -1370,14 +1370,14 @@ ${IMPORT_PROMPT}`}];
     const ab = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsArrayBuffer(file);});
     const wb = XLSX.read(ab, {type:"array"});
     const csvText = wb.SheetNames.map(n=>XLSX.utils.sheet_to_csv(wb.Sheets[n])).join("\n\n");
-    contentBlocks = [{type:"text",text:`Bank statement Excel from file "${file.name}":\n\n${csvText.substring(0,40000)}\n\n${IMPORT_PROMPT}`}];
+    contentBlocks = [{type:"text",text:`Bank statement Excel from "${file.name}":\n\n${csvText.substring(0,40000)}\n\n${IMPORT_PROMPT_TEXT}`}];
 
     } else if (ext === "pdf") {
     // PDF: send as document type (Anthropic native support)
     const base64 = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
     contentBlocks = [
       {type:"document",source:{type:"base64",media_type:"application/pdf",data:base64}},
-      {type:"text",text:IMPORT_PROMPT}
+      {type:"text",text:IMPORT_PROMPT_IMAGE}
     ];
 
   } else {
@@ -1387,7 +1387,7 @@ ${IMPORT_PROMPT}`}];
     if (!mediaType || mediaType==="application/octet-stream" || ["heic","heif"].includes(ext)) mediaType = "image/jpeg";
     contentBlocks = [
       {type:"image",source:{type:"base64",media_type:mediaType,data:base64}},
-      {type:"text",text:IMPORT_PROMPT}
+      {type:"text",text:IMPORT_PROMPT_IMAGE}
     ];
   }
 
@@ -1411,7 +1411,7 @@ ${IMPORT_PROMPT}`}];
   return Array.isArray(parsed) ? parsed : [];
 }
 
-const IMPORT_PROMPT = `You are an expense tracker. Extract ALL transactions from this file. Do your best even if quality is poor — extract what you can.
+const IMPORT_PROMPT_IMAGE = `You are an expense tracker. Extract ALL transactions from this image. Do your best even if quality is poor — extract what you can.
 
 Return ONLY a valid JSON array. If nothing readable, return [].
 
@@ -1421,14 +1421,34 @@ Return ONLY a valid JSON array. If nothing readable, return [].
 ]
 
 Rules:
-- Extract every transaction you can partially or fully read
-- itemName: merchant + ONE category word (Dinner/Lunch/Coffee/Drinks/Taxi/Stay/Ticket/Shopping/Groceries/Health/Other) + date if visible. Max 40 chars.
-- amount: transaction amount. Estimate if blurry.
+- itemName: merchant name + ONE category word + date if visible. Max 40 chars.
+- amount: the debit/charge amount. Estimate from visible digits if blurry.
 - currency: 3-letter code. Default HKD if unclear.
 - category: Meals, Drinks, Transport, Accommodation, Entertainment, Shopping, Groceries, Health, Activities, or Other
 - notes: any readable detail, empty string if nothing
-- Skip only if clearly a refund, credit, payment, or transfer
-- expenseDate: YYYY-MM-DD. Assume year 2026 if unclear. Empty string if truly no date.`;
+- Skip ONLY if it is explicitly a payment to card, refund, or cashback — NOT regular purchases
+- expenseDate: YYYY-MM-DD. Assume year 2026 if year unclear. Empty string if truly no date visible.`;
+
+const IMPORT_PROMPT_TEXT = `You are an expense tracker parsing a bank or credit card statement.
+
+Return ONLY a valid JSON array of spending transactions. No explanation, no markdown, just the array.
+
+[
+  {"itemName":"Merchant, Category, DD Mon","amount":123.45,"currency":"HKD","category":"Meals","notes":"","expenseDate":"2026-04-19"},
+  ...
+]
+
+Rules:
+- Include ALL debit/spending rows — purchases, fees, charges
+- Skip ONLY: payment to card (bill payment), refund/credit back to account, interest charges, opening/closing balance rows
+- itemName: merchant name + ONE category word (Dinner/Lunch/Coffee/Drinks/Taxi/Stay/Ticket/Shopping/Groceries/Health/Fee/Other) + day+month if visible. Max 40 chars.
+- amount: the debit amount as a positive number
+- currency: use the statement currency. Default HKD if unclear.
+- category: Meals, Drinks, Transport, Accommodation, Entertainment, Shopping, Groceries, Health, Activities, or Other
+- notes: merchant full name or any useful detail, empty string if nothing extra
+- expenseDate: YYYY-MM-DD from the transaction date column. Assume year 2026 if not shown.`;
+
+const IMPORT_PROMPT = IMPORT_PROMPT_IMAGE;
 
 async function runImportScan() {
   if (!importFileQueue.length) return toast("Add at least one file first");
@@ -1444,7 +1464,7 @@ async function runImportScan() {
       const rows = await scanOneFile(importFileQueue[i].file, i+1, importFileQueue.length, stmtDate);
       allRows = allRows.concat(rows);
     }
-    if (!allRows.length) { toast("No transactions found — try a clearer screenshot"); return; }
+    if (!allRows.length) { toast("No transactions found — check the file has transaction rows"); return; }
     importRows = allRows.map((r,i)=>({...r,id:i,deleted:false,splitMembers:state.members.map(m=>m.memberId),expenseDate:(r.expenseDate&&r.expenseDate.length===10)?r.expenseDate:stmtDate}));
     importFileQueue = [];
     closeModal("modal-import-step1");
