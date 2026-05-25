@@ -389,18 +389,18 @@
 <div id="modal-import-step1" class="modal-bg hidden" onclick="closeIfBg(event,'modal-import-step1')">
   <div class="modal" style="max-width:420px">
     <h2 style="font-family:var(--serif);font-size:1.5rem;margin-bottom:8px">Import statement</h2>
-    <div style="font-size:12px;color:#888;margin-bottom:20px">Upload screenshots, PDFs, CSV or Excel exports from your bank or credit card. Claude will extract all transactions.</div>
+    <div style="font-size:12px;color:#888;margin-bottom:20px">Upload a CSV export from your bank — fastest and cheapest. PDFs and images also work.</div>
     <div class="grid gap-4">
       <div class="grid grid-cols-2 gap-3">
         <div><label>Who paid this card?</label><select id="import-payer"></select></div>
         <div><label>Import date</label><input id="import-stmt-date" type="date"></div>
       </div>
       <div>
-        <label>Screenshots <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#bbb;font-size:11px">(add one or more)</span></label>
+        <label>Import CSV <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#bbb;font-size:11px">(or PDF / image)</span></label>
         <input type="file" id="import-upload" accept="image/*,.heic,.heif,.pdf,.csv,.xlsx,.xls" multiple style="display:none" onchange="addImportFiles(this)">
         <button class="btn btn-secondary w-full" type="button" onclick="document.getElementById('import-upload').click()" style="justify-content:center;gap:10px;padding:16px;border-style:dashed;color:#888;border-color:var(--rule)">
           <span style="font-size:18px">📷</span>
-          <span style="font-size:13px;color:var(--ink);font-weight:500">Add files</span>
+          <span style="font-size:13px;color:var(--ink);font-weight:500">Add CSV or other files</span>
         </button>
         <div id="import-file-queue" style="display:none;margin-top:8px;flex-wrap:wrap;gap:6px;flex-direction:row"></div>
       </div>
@@ -1591,7 +1591,6 @@ function renderImportReview() {
       </div>
       <div style="display:grid;gap:6px">
         <input type="text" value="${esc(row.itemName||"")}" placeholder="Item name" style="font-size:13px;padding:6px 8px" onchange="importRows[${i}].itemName=this.value">
-        <select onchange="importRows[${i}].projectId=this.value" style="font-size:11px;padding:4px 6px;color:#555;border:1px solid #ddd;border-radius:4px;background:#f9f9f9;width:100%">${projOpts}</select>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
           <div><label style="margin-bottom:2px">Expense date</label><input type="date" value="${row.expenseDate||''}" style="font-size:12px;padding:6px 8px" onchange="importRows[${i}].expenseDate=this.value"></div>
           <div></div>
