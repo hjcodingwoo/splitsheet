@@ -1542,6 +1542,16 @@ function findDuplicateExpense(row) {
   return exact || matches[0];
 }
 
+function buildProjectSelector(i, row) {
+  const projs = (state.projects||allProjectsCache||[]).filter(p=>!p.archived);
+  if (projs.length <= 1) return "";
+  const opts = projs.map(p=>{
+    const sel = p.projectId===(row.projectId||state.projectId) ? " selected" : "";
+    return `<option value="${esc(p.projectId)}"${sel}>${esc(p.name)}</option>`;
+  }).join("");
+  return `<div style="margin-bottom:6px"><label style="font-size:11px;color:#888;font-weight:500;text-transform:uppercase;letter-spacing:.06em">Save to project</label><select class="proj-sel" onchange="importRows[${i}].projectId=this.value" style="width:100%;margin-top:3px;padding:5px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px;background:#fff">${opts}</select></div>`;
+}
+
 function renderImportReview() {
   const active = importRows.filter(r=>!r.deleted);
   document.getElementById("import-review-count").textContent = `${active.length} transaction${active.length!==1?"s":""}`;
@@ -1591,7 +1601,7 @@ function renderImportReview() {
           <button type="button" onclick="importAddCategory(${i})" style="background:none;border:1.5px solid var(--rule);border-radius:4px;cursor:pointer;font-size:11px;padding:4px 8px;white-space:nowrap;color:#666;font-family:var(--sans)">+ New</button>
         </div>
         <input type="text" value="${esc(row.notes||"")}" placeholder="Notes (optional)" style="font-size:12px;padding:6px 8px" onchange="importRows[${i}].notes=this.value">
-        ${(() => { const projOpts = state.projects ? state.projects.filter(p=>!p.archived).map(p=>`<option value="${esc(p.projectId)}" ${p.projectId===(row.projectId||state.projectId)?"selected":"")}>${esc(p.name)}</option>`).join("") : `<option value="${esc(state.projectId)}">${esc(state.projectId)}</option>`; return `<div style="margin-bottom:4px"><label style="font-size:11px;color:#888;font-weight:500;text-transform:uppercase;letter-spacing:.06em">Save to project</label><select onchange="importRows[${i}].projectId=this.value" style="width:100%;margin-top:3px;padding:5px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px;background:#fff">${projOpts}</select></div>`; })()}
+        ${buildProjectSelector(i,row)}
         ${row.saved ? `<div style="text-align:center;padding:8px;background:#f0faf0;border-radius:4px;font-size:12px;color:#4a9;font-weight:500">✓ Saved</div>` : `<button type="button" class="save-next-btn" onclick="saveOneImportRow(${i})" style="width:100%;padding:8px;background:var(--ink);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-family:var(--sans);font-weight:500">Save &amp; next ↓</button>`}
         <div>
           <div style="font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#888;margin-bottom:5px">Split between</div>
