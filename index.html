@@ -1361,19 +1361,18 @@ ${text.substring(0,40000)}
 ${IMPORT_PROMPT}`}];
 
   } else if (["xls","xlsx"].includes(ext)) {
-    // Excel: parse with SheetJS to CSV text
+    // Excel: lazy-load SheetJS on demand, then parse to CSV
+    if (!window.XLSX) await new Promise((res,rej)=>{
+      const s=document.createElement("script");
+      s.src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+      s.onload=res; s.onerror=rej; document.head.appendChild(s);
+    });
     const ab = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsArrayBuffer(file);});
     const wb = XLSX.read(ab, {type:"array"});
-    const csvText = wb.SheetNames.map(n=>XLSX.utils.sheet_to_csv(wb.Sheets[n])).join("
+    const csvText = wb.SheetNames.map(n=>XLSX.utils.sheet_to_csv(wb.Sheets[n])).join("\n\n");
+    contentBlocks = [{type:"text",text:`Bank statement Excel from file "${file.name}":\n\n${csvText.substring(0,40000)}\n\n${IMPORT_PROMPT}`}];
 
-");
-    contentBlocks = [{type:"text",text:`Bank statement Excel from file "${file.name}":
-
-${csvText.substring(0,40000)}
-
-${IMPORT_PROMPT}`}];
-
-  } else if (ext === "pdf") {
+    } else if (ext === "pdf") {
     // PDF: send as document type (Anthropic native support)
     const base64 = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
     contentBlocks = [
