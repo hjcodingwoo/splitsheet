@@ -647,6 +647,7 @@ async function loadProject(projectId) {
     state.expenses=expRes.expenses; state.fxRates=projRes.fxRates||{}; state.categories=projRes.categories||[]; state.projects=allProjectsCache;
     state.currency=projRes.project.defaultCurrency||"USD"; state.payments=payRes.payments||[];
     state.me=loadLocalMe(projectId)||null;
+    batchSelectMode=false; batchSelected.clear();
     renderProject(); show("view-project"); hide("view-landing");
   } catch(e){toast("Error: "+e.message);}finally{hideLoading();}
 }
@@ -920,10 +921,13 @@ async function saveExpense() {
       }
     } else {
       const logDate=todayISO();
-      await api("addExpense",{projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits,expenseDate,logDate});
+      const addRes=await api("addExpense",{projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits,expenseDate,logDate});
+      // Push locally — skip re-fetch round-trip
+      if (addRes.expense) state.expenses.push(addRes.expense);
+      else { const expRes=await api("getExpenses",{projectId:state.projectId}); state.expenses=expRes.expenses; }
     }
-    const expRes=await api("getExpenses",{projectId:state.projectId});
-    state.expenses=expRes.expenses; renderExpenses();
+    if (editingExpenseId) { const expRes=await api("getExpenses",{projectId:state.projectId}); state.expenses=expRes.expenses; }
+    renderExpenses();
     closeModal("modal-expense"); toast(editingExpenseId?"Updated ✓":"Expense added ✓"); editingExpenseId=null;
   } catch(e){toast(e.message);}
   finally{btn.disabled=false;btn.textContent=editingExpenseId?"Update":"Save expense";}
@@ -1895,10 +1899,13 @@ async function saveOneImportRow(i) {
   try {
     const logDate = todayISO();
     const expenseDate = importRows[i].expenseDate || logDate;
-    await api("addExpense",{projectId:targetProjectId,itemName:importRows[i].itemName,amount:importRows[i].amount,currency:importRows[i].currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:importRows[i].category||"",notes:importRows[i].notes||"",customSplits:"",expenseDate,logDate});
+    const res = await api("addExpense",{projectId:targetProjectId,itemName:importRows[i].itemName,amount:importRows[i].amount,currency:importRows[i].currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:importRows[i].category||"",notes:importRows[i].notes||"",customSplits:"",expenseDate,logDate});
     importRows[i].saved = true;
-    // Refresh expenses only if saved to current project
-    if (targetProjectId === state.projectId) {
+    // Push locally — skip re-fetch
+    if (targetProjectId === state.projectId && res?.expense) {
+      state.expenses.push(res.expense);
+      renderExpenses();
+    } else if (targetProjectId === state.projectId) {
       const expRes = await api("getExpenses",{projectId:state.projectId});
       state.expenses = expRes.expenses; renderExpenses();
     }
