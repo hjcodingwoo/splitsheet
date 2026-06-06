@@ -1513,6 +1513,8 @@ async function scanReceipt(input) {
       r.onerror = rej;
       r.readAsDataURL(file);
     });
+    let mediaType = file.type;
+    if (!mediaType || mediaType === "application/octet-stream" || ["heic","heif"].includes(file.name.split(".").pop().toLowerCase())) mediaType = "image/jpeg";
     const response = await fetch("/api/scan-receipt", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1522,7 +1524,7 @@ async function scanReceipt(input) {
         messages: [{
           role: "user",
           content: [
-            { type: "image", source: { type: "base64", media_type: file.type, data: base64 } },
+            { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
             { type: "text", text: `You are an expense tracker. Analyse this receipt and return ONLY a valid JSON object, no explanation, no markdown. Do your best even if image quality is poor.
 
 {
@@ -1545,9 +1547,15 @@ Rules:
         }]
       })
     });
+    if (!response.ok) throw new Error("API error "+response.status);
     const data = await response.json();
+    if (data.error) throw new Error(data.error.message||data.error||"API error");
     const text = (data.content?.[0]?.text || "").replace(/```json|```/g,"").trim();
-    const parsed = JSON.parse(text);
+    if (!text) throw new Error("No response from image scan");
+    let parsed;
+    try { parsed = JSON.parse(text); }
+    catch(pe) { const m=text.match(/\{[\s\S]*\}/); parsed = m ? JSON.parse(m[0]) : null; }
+    if (!parsed) throw new Error("Could not read receipt");
     if (parsed.itemName) document.getElementById("exp-name").value = parsed.itemName;
     if (parsed.amount)   document.getElementById("exp-amount").value = parsed.amount;
     if (parsed.expenseDate) document.getElementById("exp-date").value = parsed.expenseDate;
@@ -1567,7 +1575,7 @@ Rules:
       }
     }
     toast("Receipt scanned ✓ — review the details");
-  } catch(e) { toast("Could not read receipt — fill in manually"); }
+  } catch(e) { console.error("Receipt scan error:",e); toast("Scan failed: "+(e.message||"unknown")+" — fill in manually"); }
   finally { document.getElementById("receipt-scanning").style.display="none"; }
 }
 
@@ -1781,11 +1789,17 @@ async function runImportScan() {
     document.getElementById("modal-import-review").style.display="block";
   } catch(e) {
     console.error("Import scan error:", e);
-    toast("Scan error: "+(e.message||"unknown"));
+    const msg = e.message||"unknown error";
+    // Show error inside the modal so user sees it (not just a toast that fades)
+    const msgEl = document.getElementById("import-scanning-msg");
+    if (msgEl) msgEl.textContent = "Scan failed: "+msg;
+    toast("Scan error: "+msg);
   } finally {
     document.getElementById("import-scanning").style.display="none";
-    document.getElementById("import-scan-btn").disabled=false;
-    document.getElementById("import-scan-btn").style.opacity="1";
+    const scanBtn = document.getElementById("import-scan-btn");
+    scanBtn.disabled = false;
+    scanBtn.style.opacity = "1";
+    scanBtn.textContent = "Scan & review";
   }
 }
 
