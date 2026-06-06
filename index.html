@@ -101,6 +101,7 @@
       <div class="mt-3 flex gap-2 justify-center">
         <button class="btn btn-secondary" onclick="showDirectory()">View all projects →</button>
         <button onclick="promptAdminLogin()" style="font-size:12px;padding:6px 14px;border-radius:4px;border:1px solid var(--rule);background:#fff;cursor:pointer;color:#888;font-family:var(--sans)">Admin</button>
+        <button id="admin-summary-btn" onclick="openAdminSummary()" style="display:none;font-size:12px;padding:6px 14px;border-radius:4px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;font-family:var(--sans)">Expense Summary</button>
         <button class="btn btn-ghost" onclick="showGuide()">? Guide</button>
       </div>
     </div>
@@ -183,7 +184,6 @@
       <button class="tab" data-tab="settle" onclick="switchTab('settle',this)">Settle Up</button>
       <button class="tab" data-tab="members" onclick="switchTab('members',this)">Members</button>
       <button class="tab" data-tab="fx" onclick="switchTab('fx',this)">FX Rates</button>
-      <button id="tab-btn-admin" class="tab" data-tab="admin" onclick="switchTab('admin',this)" style="display:none">All Expenses</button>
     </div>
   </div>
 
@@ -439,20 +439,6 @@
   </div>
 </div>
 
-<!-- Tab: Admin All Expenses -->
-<div id="tab-admin" class="hidden px-4 pb-20" style="max-width:900px;margin:0 auto">
-  <div class="py-4" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-    <span style="font-weight:600;font-family:var(--serif);font-size:1.1rem">All Expenses</span>
-    <input type="date" id="admin-date-from" onchange="renderAdminTab()" style="padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px">
-    <span style="font-size:12px;color:#aaa">to</span>
-    <input type="date" id="admin-date-to" onchange="renderAdminTab()" style="padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px">
-    <button onclick="resetAdminDates()" style="font-size:11px;padding:3px 8px;border:1px solid var(--rule);border-radius:3px;background:#fff;cursor:pointer;color:#888">Reset to 1 month</button>
-    <span id="admin-total" style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--ink);margin-left:auto"></span>
-  </div>
-  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px" id="admin-member-filter"></div>
-  <div id="admin-expense-list" class="card"></div>
-</div>
-
 <!-- IMPORT STEP 1: PICK PAYER + UPLOAD -->
 <div id="modal-import-step1" class="modal-bg hidden" onclick="closeIfBg(event,'modal-import-step1')">
   <div class="modal" style="max-width:420px">
@@ -557,6 +543,7 @@ window.addEventListener("DOMContentLoaded", () => {
   if (p) { document.getElementById("join-id").value = p; document.getElementById("join-name").focus(); }
   if (!localStorage.getItem("sc_guide_seen")) showGuide();
   loadAllProjectsCache();
+  if (isAdmin) { const sb=document.getElementById("admin-summary-btn"); if(sb) sb.style.display=""; }
 });
 
 // ── GUIDE ─────────────────────────────────────────────────
@@ -663,6 +650,13 @@ async function loadProject(projectId) {
     state.currency=projRes.project.defaultCurrency||"USD"; state.payments=payRes.payments||[];
     state.me=loadLocalMe(projectId)||null;
     batchSelectMode=false; batchSelected.clear();
+    // Reset to expenses tab
+    ["expenses","totals","balances","settle","members","fx"].forEach(t=>{
+      const el=document.getElementById("tab-"+t); if(el) el.classList.add("hidden");
+      const btn=document.querySelector(`[data-tab="${t}"]`); if(btn) btn.classList.remove("active");
+    });
+    const expTab=document.getElementById("tab-expenses"); if(expTab) expTab.classList.remove("hidden");
+    const expBtn=document.querySelector('[data-tab="expenses"]'); if(expBtn) expBtn.classList.add("active");
     renderProject(); show("view-project"); hide("view-landing");
   } catch(e){toast("Error: "+e.message);}finally{hideLoading();}
 }
@@ -670,7 +664,6 @@ async function loadProject(projectId) {
 function renderProject() {
   document.getElementById("hdr-name").textContent=state.project.name;
   document.getElementById("hdr-members").textContent=state.members.map(m=>m.name).join(" · ")||"No members";
-  document.getElementById("tab-btn-admin").style.display = isAdmin ? "" : "none";
   renderExpenses();
 }
 
@@ -1359,17 +1352,13 @@ async function openAddCategory(){
 
 // ── TABS ─────────────────────────────────────────────────
 function switchTab(name,btn){
-  ["expenses","totals","balances","settle","members","fx","admin"].forEach(t=>{
+  ["expenses","totals","balances","settle","members","fx"].forEach(t=>{
     document.getElementById("tab-"+t).classList.add("hidden");
     document.querySelector(`[data-tab="${t}"]`).classList.remove("active");
   });
   document.getElementById("tab-"+name).classList.remove("hidden");
   btn.classList.add("active");
   if(name==="totals") renderTotalsTab();
-  if(name==="admin") {
-    if (!document.getElementById("admin-date-from").value) resetAdminDates();
-    else renderAdminTab();
-  }
   if(name==="balances"||name==="settle") renderBalancesAndSettle();
   if(name==="members") renderMembersTab();
   if(name==="fx") renderFxTab();
@@ -1383,7 +1372,7 @@ function promptAdminLogin() {
     isAdmin = true;
     sessionStorage.setItem("sc_admin","1");
     toast("Admin mode on ✓");
-    document.getElementById("tab-btn-admin").style.display = "";
+    const sb=document.getElementById("admin-summary-btn"); if(sb) sb.style.display="";
     renderExpenses();
   } else {
     isAdmin = false;
@@ -1867,6 +1856,93 @@ async function renderAdminTab() {
   } catch(ex) { list.innerHTML=`<div style="color:red;padding:12px;font-size:12px">Error: ${ex.message}</div>`; }
 }
 
+function openAdminSummary() {
+  if (!isAdmin) return toast("Admin access required");
+  document.getElementById("modal-admin-summary").style.display = "block";
+  // Set default dates
+  const to = new Date(); const from = new Date(); from.setMonth(from.getMonth()-1);
+  document.getElementById("summary-date-from").value = from.toISOString().slice(0,10);
+  document.getElementById("summary-date-to").value = to.toISOString().slice(0,10);
+  // Load projects
+  const projList = document.getElementById("summary-project-list");
+  const memberList = document.getElementById("summary-member-list");
+  projList.innerHTML = "";
+  memberList.innerHTML = "";
+  (allProjectsCache||[]).filter(p=>!p.archived).forEach(p=>{
+    projList.innerHTML += `<div class="check-item" data-id="${p.projectId}" onclick="toggleBatchChk(this);loadSummaryMembers()" style="font-size:11px;padding:3px 8px;cursor:pointer">${esc(p.name)}</div>`;
+  });
+}
+
+function loadSummaryMembers() {
+  const selectedProjs = [...document.querySelectorAll("#summary-project-list .check-item.checked")].map(el=>el.dataset.id);
+  const memberMap = {};
+  (allProjectsCache||[]).filter(p=>selectedProjs.includes(p.projectId)).forEach(p=>{
+    (p.members||[]).forEach(m=>{ memberMap[m.name]=true; });
+  });
+  const ml = document.getElementById("summary-member-list");
+  ml.innerHTML = Object.keys(memberMap).sort().map(name=>`<div class="check-item" data-name="${esc(name)}" onclick="toggleBatchChk(this)" style="font-size:11px;padding:3px 8px;cursor:pointer">${esc(name)}</div>`).join("");
+}
+
+async function generateSummary() {
+  const selectedProjs = [...document.querySelectorAll("#summary-project-list .check-item.checked")].map(el=>el.dataset.id);
+  const selectedMembers = [...document.querySelectorAll("#summary-member-list .check-item.checked")].map(el=>el.dataset.name);
+  const fromVal = document.getElementById("summary-date-from").value;
+  const toVal = document.getElementById("summary-date-to").value;
+  if (!selectedProjs.length) return toast("Select at least one project");
+  if (!fromVal || !toVal) return toast("Select date range");
+  const from = new Date(fromVal); from.setHours(0,0,0,0);
+  const to = new Date(toVal); to.setHours(23,59,59,999);
+  const results = document.getElementById("summary-results");
+  results.innerHTML = `<div style="text-align:center;padding:20px;color:#aaa;font-size:13px">Loading…</div>`;
+  try {
+    let allExpenses = [];
+    for (const projId of selectedProjs) {
+      const proj = allProjectsCache.find(p=>p.projectId===projId);
+      const expRes = await api("getExpenses",{projectId:projId});
+      (expRes.expenses||[]).forEach(e=>{ e._projectName=proj?.name||projId; allExpenses.push(e); });
+    }
+    // Filter date
+    allExpenses = allExpenses.filter(e=>{
+      const d = new Date(e.expenseDate&&String(e.expenseDate).trim() ? e.expenseDate : e.createdAt);
+      return d>=from && d<=to;
+    });
+    // Filter members
+    if (selectedMembers.length) allExpenses = allExpenses.filter(e=>selectedMembers.includes(e.payerName));
+    // Sort newest first
+    allExpenses.sort((a,b)=>new Date(b.expenseDate||b.createdAt)-new Date(a.expenseDate||a.createdAt));
+    // Totals by project
+    const byProject = {};
+    allExpenses.forEach(e=>{
+      if (!byProject[e._projectName]) byProject[e._projectName] = {total:0, count:0, currency:e.currency||""};
+      byProject[e._projectName].total += parseFloat(e.amount)||0;
+      byProject[e._projectName].count++;
+    });
+    if (!allExpenses.length) { results.innerHTML=`<div style="text-align:center;padding:20px;color:#aaa">No expenses found.</div>`; return; }
+    let html = `<div style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:8px">`;
+    Object.entries(byProject).forEach(([proj,data])=>{
+      html += `<div style="padding:8px 14px;background:var(--cream);border-radius:6px;font-size:12px"><strong>${esc(proj)}</strong><br><span style="font-family:var(--mono)">${formatAmt(data.total)} ${data.currency}</span> · ${data.count} expense${data.count!==1?"s":""}</div>`;
+    });
+    html += `</div><div class="card">`;
+    allExpenses.forEach(e=>{
+      const d = (e.expenseDate&&String(e.expenseDate).trim()) ? fmtDate(e.expenseDate) : fmtDate(e.createdAt);
+      const cat = cleanCat(e.category);
+      html += `<div class="expense-row">
+        <div style="flex:1;min-width:0">
+          <div class="font-medium text-sm">${esc(e.itemName)}${cat!=="Uncategorised"?` <span class="pill pill-currency">${esc(cat)}</span>`:""}</div>
+          <div class="text-xs text-gray-400 mt-0.5">Paid by <strong>${esc(e.payerName)}</strong> · <span style="color:#bbb;font-family:var(--mono);font-size:10px">${esc(e._projectName)}</span></div>
+          <div style="font-family:var(--mono);font-size:10px;color:#bbb;margin-top:2px">${d}</div>
+        </div>
+        <div class="text-right">
+          <div class="font-medium">${formatAmt(e.amount)}</div>
+          <span class="pill pill-currency">${e.currency||""}</span>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+    results.innerHTML = html;
+  } catch(ex) { results.innerHTML=`<div style="color:red;padding:12px;font-size:12px">Error: ${ex.message}</div>`; }
+}
+
 function toggleAdminMember(el) {
   el.classList.toggle("checked");
   renderAdminTab();
@@ -2065,7 +2141,7 @@ async function saveImportedExpenses() {
   }
   const btn = document.getElementById("import-confirm-btn");
   btn.disabled = true;
-  let saved = 0;
+  let saved = 0, errors = 0;
   for (let _bi=0; _bi<active.length; _bi++) {
     const row = active[_bi];
     // Re-read from importRows to get any DOM edits user made
@@ -2080,13 +2156,14 @@ async function saveImportedExpenses() {
       await api("addExpense",{projectId:liveRow.projectId||state.projectId,itemName:liveRow.itemName,amount:liveRow.amount,currency:liveRow.currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:liveRow.category||"",notes:liveRow.notes||"",customSplits:"",expenseDate,logDate});
       saved++;
       btn.textContent = `Importing ${saved}/${active.length}…`;
-    } catch(e) { toast("Error on: "+row.itemName); }
+    } catch(e) { errors++; console.error("Import error:", e.message, row.itemName); }
   }
+  btn.textContent = "Refreshing…";
   const expRes = await api("getExpenses",{projectId:state.projectId});
   state.expenses = expRes.expenses;
   renderExpenses();
   document.getElementById("modal-import-review").style.display="none";
-  toast(`${saved} expense${saved!==1?"s":""} imported ✓`);
+  toast(`${saved} saved${errors?` (${errors} failed — check console)`:""} ✓`);
   btn.disabled = false;
 }
 
@@ -2125,5 +2202,35 @@ function goHome(){hide("view-project");show("view-landing");history.replaceState
 function saveLocalMe(projectId,memberId,name){try{localStorage.setItem("ss_me_"+projectId,JSON.stringify({memberId,name}));}catch{}state.me={memberId,name};}
 function loadLocalMe(projectId){try{return JSON.parse(localStorage.getItem("ss_me_"+projectId));}catch{return null;}}
 </script>
+<!-- ADMIN EXPENSE SUMMARY MODAL -->
+<div id="modal-admin-summary" style="display:none;position:fixed;inset:0;background:var(--paper);z-index:300;overflow-y:auto;padding:20px 16px">
+  <div style="max-width:760px;margin:0 auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h2 style="font-family:var(--serif);font-size:1.4rem;margin:0">Expense Summary</h2>
+      <button onclick="document.getElementById('modal-admin-summary').style.display='none'" style="font-size:20px;background:none;border:none;cursor:pointer;color:#aaa">✕</button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;padding:12px;background:var(--cream);border-radius:8px">
+      <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px">
+        <label style="font-size:11px;color:#888;font-weight:500">Projects</label>
+        <div id="summary-project-list" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px">
+        <label style="font-size:11px;color:#888;font-weight:500">Members</label>
+        <div id="summary-member-list" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:11px;color:#888;font-weight:500">Date range</label>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input type="date" id="summary-date-from" style="padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px">
+          <span style="color:#aaa;font-size:12px">to</span>
+          <input type="date" id="summary-date-to" style="padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px">
+        </div>
+      </div>
+      <button onclick="generateSummary()" class="btn btn-primary" style="align-self:flex-end;padding:6px 18px">Generate</button>
+    </div>
+    <div id="summary-results"></div>
+  </div>
+</div>
+
 </body>
 </html>
