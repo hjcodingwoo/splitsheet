@@ -955,7 +955,9 @@ async function saveExpense() {
   if(!itemName) return toast("Enter an item name");
   if(!amount||amount<=0) return toast("Enter a valid amount");
   if(!expenseDate) return toast("Enter expense date");
-  if(!splitBetween.length) return toast("Select at least one person");
+  // resolvedSplit: use checked members, fallback to all members (handles edit case where checks may not re-render)
+  const resolvedSplit = splitBetween.length ? splitBetween : state.members.map(m=>m.memberId);
+  if(!resolvedSplit.length) return toast("No members in project");
   let customSplits=null;
   if(splitMode==="custom"){
     const cs=getCustomSplits();
@@ -963,8 +965,6 @@ async function saveExpense() {
     if(Math.abs(total-amount)>0.02) return toast(`Split total (${formatAmt(total)}) doesn't match amount (${formatAmt(amount)})`);
     customSplits=JSON.stringify(cs);
   }
-  // Fallback: if no split members checked, use all members
-  const resolvedSplit = splitBetween.length ? splitBetween : state.members.map(m=>m.memberId);
   const btn=document.getElementById("save-exp-btn");
   btn.disabled=true; btn.innerHTML=`<span class="spin"></span>`;
   const fxVal=document.getElementById("exp-fx-rate").value;
@@ -2082,7 +2082,7 @@ function buildProjectSelector(i, row) {
     const sel = p.projectId===(row.projectId||state.projectId) ? " selected" : "";
     return `<option value="${esc(p.projectId)}"${sel}>${esc(p.name)}</option>`;
   }).join("");
-  return `<div style="margin-bottom:6px"><label style="font-size:11px;color:#888;font-weight:500;text-transform:uppercase;letter-spacing:.06em">Save to project</label><select class="proj-sel" onchange="importRows[${i}].projectId=this.value" style="width:100%;margin-top:3px;padding:5px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px;background:#fff;border:2px solid var(--accent)">${opts}</select></div>`;
+  return `<div style="margin-bottom:6px"><label style="font-size:11px;color:#888;font-weight:500;text-transform:uppercase;letter-spacing:.06em">Save to project</label><select class="proj-sel" onchange="importRows[${i}].projectId=this.value;loadImportRowContext(this,${i})" style="width:100%;margin-top:3px;padding:5px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px;background:#fff;border:2px solid var(--accent)">${opts}</select></div>`;
 }
 
 function renderImportReview() {
@@ -2193,6 +2193,39 @@ async function saveProjectCurrency() {
   finally { hideLoading(); }
 }
 
+async function loadImportRowContext(selectEl, rowIdx) {
+  const projectId = selectEl.value;
+  if (!projectId || projectId === state.projectId) return;
+  // Find the card
+  const visIdx = importRows.slice(0, rowIdx).filter(r=>!r.deleted).length;
+  const card = document.querySelectorAll("#import-review-list > div")[visIdx];
+  if (!card) return;
+  try {
+    const res = await api("getProject", {projectId});
+    // Update category select with target project categories
+    const catSel = card.querySelectorAll("select")[1];
+    if (catSel && res.categories) {
+      const curVal = catSel.value;
+      catSel.innerHTML = `<option value="">— none —</option>` +
+        res.categories.map(cat=>`<option value="${esc(cat.name)}">${esc(cat.name)}</option>`).join("");
+      if (curVal) catSel.value = curVal;
+    }
+    // Show target project members as a note
+    const members = res.members || [];
+    let memberNote = card.querySelector(".target-members-note");
+    if (!memberNote) {
+      memberNote = document.createElement("div");
+      memberNote.className = "target-members-note";
+      memberNote.style.cssText = "font-size:11px;color:#888;margin-top:4px;padding:4px 0";
+      card.appendChild(memberNote);
+    }
+    memberNote.textContent = members.length
+      ? "Target project members: " + members.map(m=>m.name).join(", ")
+      : "No members in target project";
+    console.log("loadImportRowContext:", projectId, "members:", members.map(m=>m.name), "cats:", res.categories?.map(c=>c.name));
+  } catch(e) { console.error("loadImportRowContext error:", e); }
+}
+
 async function onMoveProjectChange(projectId) {
   const details = document.getElementById("move-details");
   if (!projectId) { details.style.display="none"; return; }
@@ -2222,10 +2255,12 @@ async function saveOneImportRow(i) {
     const amtEl = card.querySelector("input[type=number]");
     if (amtEl?.value) importRows[i].amount = parseFloat(amtEl.value)||importRows[i].amount;
       const selects = card.querySelectorAll("select");
-    if (selects[0]?.value) importRows[i].category = selects[0].value;
-    // project selector has class proj-sel
+    // selects[0] = currency, selects[1] = category (per card template order)
+    if (selects[0]?.value) importRows[i].currency = selects[0].value;
+    if (selects[1]?.value) importRows[i].category = selects[1].value;
     const projSel = card.querySelector("select.proj-sel");
     if (projSel?.value) importRows[i].projectId = projSel.value;
+    console.log("saveOneImportRow DOM read:", {currency:importRows[i].currency, category:importRows[i].category, projectId:importRows[i].projectId});
   }
   // Show saving feedback immediately
   const btn = card?.querySelector(".save-next-btn");
