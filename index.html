@@ -882,7 +882,7 @@ function openAddExpense() {
   showModal("modal-expense"); document.getElementById("exp-name").focus();
 }
 
-function openEditExpense(expenseId) {
+async function openEditExpense(expenseId) {
   const exp=state.expenses.find(e=>String(e.expenseId).trim()===String(expenseId).trim());
   if(!exp) return toast("Expense not found");
   editingExpenseId=expenseId;
@@ -911,10 +911,21 @@ function openEditExpense(expenseId) {
   // Show move-to-project only when editing
   const moveRow = document.getElementById("move-project-row");
   const moveSel = document.getElementById("move-project-sel");
-  const otherProjs = (allProjectsCache||[]).filter(p=>!p.archived&&p.projectId!==state.projectId);
-  if (isAdmin && otherProjs.length) {
-    moveSel.innerHTML = `<option value="">— stay in ${esc(state.project.name)} —</option>`+otherProjs.map(p=>`<option value="${p.projectId}">${esc(p.name)}</option>`).join("");
-    moveRow.style.display = "flex";
+  // Reset move-details when opening
+  document.getElementById("move-details").style.display = "none";
+  moveSel.value = "";
+  if (isAdmin) {
+    // Ensure cache is loaded
+    if (!allProjectsCache.length) {
+      try { const r=await api("getAllProjects"); allProjectsCache=r.projects||[]; } catch(e){}
+    }
+    const otherProjs = allProjectsCache.filter(p=>!p.archived&&p.projectId!==state.projectId);
+    if (otherProjs.length) {
+      moveSel.innerHTML = `<option value="">— stay in ${esc(state.project.name)} —</option>`+otherProjs.map(p=>`<option value="${p.projectId}">${esc(p.name)}</option>`).join("");
+      moveRow.style.display = "flex";
+    } else {
+      moveRow.style.display = "none";
+    }
   } else {
     moveRow.style.display = "none";
   }
@@ -952,10 +963,14 @@ async function saveExpense() {
     if(Math.abs(total-amount)>0.02) return toast(`Split total (${formatAmt(total)}) doesn't match amount (${formatAmt(amount)})`);
     customSplits=JSON.stringify(cs);
   }
+  // Fallback: if no split members checked, use all members
+  const resolvedSplit = splitBetween.length ? splitBetween : state.members.map(m=>m.memberId);
   const btn=document.getElementById("save-exp-btn");
   btn.disabled=true; btn.innerHTML=`<span class="spin"></span>`;
   const fxVal=document.getElementById("exp-fx-rate").value;
   if(currency!==state.currency&&fxVal) await maybeSaveFxFromExpense(currency,fxVal);
+  const wasEditing = !!editingExpenseId;
+  console.log("saveExpense: editing="+wasEditing+" expenseId="+editingExpenseId+" item="+itemName);
   try {
     if(editingExpenseId){
       const moveToProject = document.getElementById("move-project-sel")?.value;
@@ -971,7 +986,8 @@ async function saveExpense() {
         await api("deleteExpense",{expenseId:editingExpenseId,projectId:state.projectId});
       } else {
         const logDate=v("exp-logdate")||todayISO();
-        await api("editExpense",{expenseId:editingExpenseId,projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits:customSplits||"",expenseDate,logDate});
+        console.log("editExpense payload:", {expenseId:editingExpenseId, splitBetween:resolvedSplit});
+        await api("editExpense",{expenseId:editingExpenseId,projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween:resolvedSplit,category,notes,customSplits:customSplits||"",expenseDate,logDate});
       }
       const expRes=await api("getExpenses",{projectId:state.projectId});
       state.expenses=expRes.expenses;
@@ -983,10 +999,11 @@ async function saveExpense() {
       else { const expRes=await api("getExpenses",{projectId:state.projectId}); state.expenses=expRes.expenses; }
     }
     renderExpenses();
-    const wasEditing=!!editingExpenseId;
-    closeModal("modal-expense"); toast(wasEditing?"Updated ✓":"Expense added ✓"); editingExpenseId=null;
-  } catch(e){toast(e.message);}
-  finally{btn.disabled=false;btn.textContent=editingExpenseId?"Update":"Save expense";}
+    closeModal("modal-expense");
+    toast(wasEditing?"Updated ✓":"Expense added ✓");
+    editingExpenseId=null;
+  } catch(e){ console.error("saveExpense error:",e); toast(e.message||"Save failed"); }
+  finally{ btn.disabled=false; btn.textContent=wasEditing?"Update":"Save expense"; }
 }
 
 async function deleteExpense(expenseId) {
@@ -2204,9 +2221,11 @@ async function saveOneImportRow(i) {
     if (dateEl?.value) importRows[i].expenseDate = dateEl.value;
     const amtEl = card.querySelector("input[type=number]");
     if (amtEl?.value) importRows[i].amount = parseFloat(amtEl.value)||importRows[i].amount;
-    const selects = card.querySelectorAll("select");
+      const selects = card.querySelectorAll("select");
     if (selects[0]?.value) importRows[i].category = selects[0].value;
-    if (selects[1]?.value) importRows[i].projectId = selects[1].value;
+    // project selector has class proj-sel
+    const projSel = card.querySelector("select.proj-sel");
+    if (projSel?.value) importRows[i].projectId = projSel.value;
   }
   // Show saving feedback immediately
   const btn = card?.querySelector(".save-next-btn");
@@ -2221,13 +2240,12 @@ async function saveOneImportRow(i) {
     const expenseDate = importRows[i].expenseDate || logDate;
     const res = await api("addExpense",{projectId:targetProjectId,itemName:importRows[i].itemName,amount:importRows[i].amount,currency:importRows[i].currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:importRows[i].category||"",notes:importRows[i].notes||"",customSplits:"",expenseDate,logDate});
     importRows[i].saved = true;
-    // Push locally — skip re-fetch
-    if (targetProjectId === state.projectId && res?.expense) {
-      state.expenses.push(res.expense);
-      renderExpenses();
-    } else if (targetProjectId === state.projectId) {
+    console.log("Saved expense to project:", targetProjectId, "res:", res);
+    // Always refresh if saving to current project
+    if (targetProjectId === state.projectId) {
       const expRes = await api("getExpenses",{projectId:state.projectId});
-      state.expenses = expRes.expenses; renderExpenses();
+      state.expenses = expRes.expenses;
+      renderExpenses();
     }
     toast(importRows[i].itemName+" saved ✓");
     renderImportReview();
