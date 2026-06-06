@@ -2071,7 +2071,6 @@ function buildProjectSelector(i, row) {
 function renderImportReview() {
   const active = importRows.filter(r=>!r.deleted);
   document.getElementById("import-review-count").textContent = `${active.length} transaction${active.length!==1?"s":""}`;
-  document.getElementById("import-confirm-btn").textContent = `Import ${active.length}`;
   const catOpts = `<option value="">— None —</option>`+state.categories.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
   document.getElementById("import-review-list").innerHTML = importRows.map((row,i)=>{
     if (row.deleted) return "";
@@ -2262,8 +2261,6 @@ async function saveImportedExpenses() {
     if (alreadySaved) { document.getElementById("modal-import-review").style.display="none"; toast(`${alreadySaved} expense${alreadySaved!==1?"s":""} already saved ✓`); return; }
     return toast("No transactions to import");
   }
-  const btn = document.getElementById("import-confirm-btn");
-  btn.disabled = true;
   let saved = 0, errors = 0;
   for (let _bi=0; _bi<active.length; _bi++) {
     const row = active[_bi];
@@ -2281,14 +2278,12 @@ async function saveImportedExpenses() {
       btn.textContent = `Importing ${saved}/${active.length}…`;
     } catch(e) { errors++; console.error("Import error:", e.message, row.itemName); }
   }
-  btn.textContent = "Refreshing…";
   const expRes = await api("getExpenses",{projectId:state.projectId});
   state.expenses = expRes.expenses;
   renderExpenses();
   document.getElementById("modal-import-review").style.display="none";
   const crossProj = active.filter(r=>(importRows.find(x=>x.id===r.id)||r).projectId&&(importRows.find(x=>x.id===r.id)||r).projectId!==state.projectId).length;
   toast(`${saved} saved${crossProj?` (${crossProj} to other projects)`:""} ✓`);
-  btn.disabled = false;
 }
 
 // ── CORE UTILS ───────────────────────────────────────────
