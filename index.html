@@ -102,6 +102,7 @@
         <button class="btn btn-secondary" onclick="showDirectory()">View all projects →</button>
         <button onclick="promptAdminLogin()" style="font-size:12px;padding:6px 14px;border-radius:4px;border:1px solid var(--rule);background:#fff;cursor:pointer;color:#888;font-family:var(--sans)">Admin</button>
         <button id="admin-summary-btn" onclick="openAdminSummary()" style="display:none;font-size:12px;padding:6px 14px;border-radius:4px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;font-family:var(--sans)">Expense Summary</button>
+        <button id="repair-btn" onclick="repairHillaryExpenses()" style="display:none;font-size:12px;padding:6px 14px;border-radius:4px;border:1px solid #e74;background:#fff;color:#e74;cursor:pointer;font-family:var(--sans)">⚠ Fix misrouted expenses</button>
         <button class="btn btn-ghost" onclick="showGuide()">? Guide</button>
       </div>
     </div>
@@ -429,7 +430,7 @@
       </div>
       <div id="move-project-row" style="display:none;align-items:center;gap:8px;padding:10px;background:var(--cream);border-radius:6px;margin-bottom:8px">
         <span style="font-size:12px;color:#888;white-space:nowrap">Move to project:</span>
-        <select id="move-project-sel" style="flex:1;padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px;background:#fff"><option value="">— stay here —</option></select>
+        <select id="move-project-sel" onchange="onMoveProjectChange(this.value)" style="flex:1;padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px;background:#fff"><option value="">— stay here —</option></select>
       </div>
       <div class="flex gap-3 pt-2">
         <button class="btn btn-secondary flex-1" onclick="closeModal('modal-expense')">Cancel</button>
@@ -543,7 +544,7 @@ window.addEventListener("DOMContentLoaded", () => {
   if (p) { document.getElementById("join-id").value = p; document.getElementById("join-name").focus(); }
   if (!localStorage.getItem("sc_guide_seen")) showGuide();
   loadAllProjectsCache();
-  if (isAdmin) { const sb=document.getElementById("admin-summary-btn"); if(sb) sb.style.display=""; }
+  if (isAdmin) { const sb=document.getElementById("admin-summary-btn"); if(sb) sb.style.display=""; const rb=document.getElementById("repair-btn"); if(rb) rb.style.display=""; }
 });
 
 // ── GUIDE ─────────────────────────────────────────────────
@@ -1373,6 +1374,7 @@ function promptAdminLogin() {
     sessionStorage.setItem("sc_admin","1");
     toast("Admin mode on ✓");
     const sb=document.getElementById("admin-summary-btn"); if(sb) sb.style.display="";
+    const rb=document.getElementById("repair-btn"); if(rb) rb.style.display="";
     renderExpenses();
   } else {
     isAdmin = false;
@@ -1856,6 +1858,19 @@ async function renderAdminTab() {
   } catch(ex) { list.innerHTML=`<div style="color:red;padding:12px;font-size:12px">Error: ${ex.message}</div>`; }
 }
 
+async function repairHillaryExpenses() {
+  if (!isAdmin) return toast("Admin only");
+  if (!confirm("Move 48 misrouted expenses to hillary-expense?")) return;
+  showLoading("Repairing…");
+  try {
+    const ids = ["aa0f4a93c047","f38c6a7359bd","511779f372ec","8701b0386f55","f65eeb4bcd40","0af2717e2ddb","f18e81e75400","9da7b6bcdd22","2ba43fc1013e","3de4727d1cff","af31364e005a","2fc103405981","b8a152235ed0","7d00834365ae","7655dc884749","3fa330970850","48c92a7b01da","ff77ca42441c","6f2adc5fd171","c75d8e099992","a76518553ea7","6033a960cf6b","e04f6c842a56","756a9c1659e1","03a83f640a51","2ac1895692e0","5cadbc97dcea","c6449b1e79c8","3a2437ae0125","22cb7aac90ee","a237ed2719c5","3edc4718527b","bff5138fd144","7d50482a2da6","7a720cd5559d","3bb80a3b874a","f76ee9e9f402","6ef1c427d752","df6b01d57a0c","e14e3296ec43","9dce80a22e9b","f32641a95478","206c674cc170","26f13c16332f","2c1ce0140579","21b118743ef0","4d29cc18161e","1084cb9e6b69"];
+    const res = await api("bulkMoveExpenses", {expenseIds: ids.join(","), fromProjectId:"", toProjectId:"hillary-expense"});
+    toast("Moved " + res.moved + " of 48 expenses to hillary-expense ✓");
+    document.getElementById("repair-btn").style.display = "none";
+  } catch(e) { toast("Error: "+e.message); }
+  finally { hideLoading(); }
+}
+
 function openAdminSummary() {
   if (!isAdmin) return toast("Admin access required");
   document.getElementById("modal-admin-summary").style.display = "block";
@@ -1899,32 +1914,99 @@ async function generateSummary() {
     for (const projId of selectedProjs) {
       const proj = allProjectsCache.find(p=>p.projectId===projId);
       const expRes = await api("getExpenses",{projectId:projId});
-      (expRes.expenses||[]).forEach(e=>{ e._projectName=proj?.name||projId; allExpenses.push(e); });
+      (expRes.expenses||[]).forEach(e=>{ e._projectName=proj?.name||projId; e._projCurrency=proj?.defaultCurrency||""; allExpenses.push(e); });
     }
     // Filter date
     allExpenses = allExpenses.filter(e=>{
-      const d = new Date(e.expenseDate&&String(e.expenseDate).trim() ? e.expenseDate : e.createdAt);
+      const d = new Date((e.expenseDate&&String(e.expenseDate).trim()) ? e.expenseDate : e.createdAt);
       return d>=from && d<=to;
     });
-    // Filter members
+    // Filter members (payer)
     if (selectedMembers.length) allExpenses = allExpenses.filter(e=>selectedMembers.includes(e.payerName));
-    // Sort newest first
+    if (!allExpenses.length) { results.innerHTML=`<div style="text-align:center;padding:20px;color:#aaa">No expenses found.</div>`; return; }
     allExpenses.sort((a,b)=>new Date(b.expenseDate||b.createdAt)-new Date(a.expenseDate||a.createdAt));
-    // Totals by project
+
+    // ── Totals by project
     const byProject = {};
     allExpenses.forEach(e=>{
-      if (!byProject[e._projectName]) byProject[e._projectName] = {total:0, count:0, currency:e.currency||""};
-      byProject[e._projectName].total += parseFloat(e.amount)||0;
+      if (!byProject[e._projectName]) byProject[e._projectName]={total:0,count:0,ccy:e.currency||e._projCurrency};
+      byProject[e._projectName].total+=parseFloat(e.amount)||0;
       byProject[e._projectName].count++;
     });
-    if (!allExpenses.length) { results.innerHTML=`<div style="text-align:center;padding:20px;color:#aaa">No expenses found.</div>`; return; }
-    let html = `<div style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:8px">`;
-    Object.entries(byProject).forEach(([proj,data])=>{
-      html += `<div style="padding:8px 14px;background:var(--cream);border-radius:6px;font-size:12px"><strong>${esc(proj)}</strong><br><span style="font-family:var(--mono)">${formatAmt(data.total)} ${data.currency}</span> · ${data.count} expense${data.count!==1?"s":""}</div>`;
-    });
-    html += `</div><div class="card">`;
+
+    // ── By category
+    const byCat = {};
     allExpenses.forEach(e=>{
-      const d = (e.expenseDate&&String(e.expenseDate).trim()) ? fmtDate(e.expenseDate) : fmtDate(e.createdAt);
+      const cat = cleanCat(e.category);
+      if (!byCat[cat]) byCat[cat]={total:0,count:0};
+      byCat[cat].total+=parseFloat(e.amount)||0;
+      byCat[cat].count++;
+    });
+    const sortedCats = Object.entries(byCat).sort((a,b)=>b[1].total-a[1].total);
+    const grandTotal = allExpenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+
+    // ── By month
+    const byMonth = {};
+    allExpenses.forEach(e=>{
+      const d = new Date((e.expenseDate&&String(e.expenseDate).trim())?e.expenseDate:e.createdAt);
+      const mk = d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+      if (!byMonth[mk]) byMonth[mk]={total:0,count:0};
+      byMonth[mk].total+=parseFloat(e.amount)||0;
+      byMonth[mk].count++;
+    });
+    const sortedMonths = Object.entries(byMonth).sort((a,b)=>a[0].localeCompare(b[0]));
+
+    let html = "";
+
+    // Project totals pills
+    html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">`;
+    Object.entries(byProject).forEach(([proj,d])=>{
+      html += `<div style="padding:8px 14px;background:var(--cream);border-radius:6px;font-size:12px"><strong>${esc(proj)}</strong><br><span style="font-family:var(--mono)">${formatAmt(d.total)} ${d.ccy}</span> · ${d.count} expense${d.count!==1?"s":""}</div>`;
+    });
+    html += `</div>`;
+
+    // Category breakdown
+    html += `<div class="card" style="margin-bottom:12px;padding:12px">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px">By Category</div>`;
+    sortedCats.forEach(([cat,d])=>{
+      const pct = grandTotal>0?Math.round(d.total/grandTotal*100):0;
+      html += `<div style="margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
+          <span>${esc(cat)}</span>
+          <span style="font-family:var(--mono)">${formatAmt(d.total)} <span style="color:#aaa;font-size:10px">${pct}%</span></span>
+        </div>
+        <div style="height:4px;background:var(--rule);border-radius:2px"><div style="height:4px;background:var(--accent);border-radius:2px;width:${pct}%"></div></div>
+      </div>`;
+    });
+    html += `</div>`;
+
+    // Month-to-month comparison
+    if (sortedMonths.length > 1) {
+      html += `<div class="card" style="margin-bottom:12px;padding:12px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:8px">Month by Month</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px">`;
+      const maxMonthTotal = Math.max(...sortedMonths.map(([,d])=>d.total));
+      sortedMonths.forEach(([mk,d],idx)=>{
+        const prev = idx>0?sortedMonths[idx-1][1].total:null;
+        const diff = prev!==null?((d.total-prev)/prev*100):null;
+        const diffStr = diff!==null?(diff>=0?`▲ ${diff.toFixed(0)}%`:`▼ ${Math.abs(diff).toFixed(0)}%`):"";
+        const diffColor = diff!==null?(diff>=0?"#e74":"#4a9"):"";
+        const [yr,mo] = mk.split("-");
+        const label = new Date(parseInt(yr),parseInt(mo)-1,1).toLocaleDateString("en-GB",{month:"short",year:"numeric"});
+        html += `<div style="padding:8px;background:var(--cream);border-radius:6px;font-size:11px">
+          <div style="font-weight:600;color:#888">${label}</div>
+          <div style="font-family:var(--mono);font-size:13px;font-weight:600;margin:2px 0">${formatAmt(d.total)}</div>
+          <div style="color:#aaa">${d.count} expense${d.count!==1?"s":""}</div>
+          ${diff!==null?`<div style="color:${diffColor};font-size:10px;margin-top:2px">${diffStr} vs prev</div>`:""}
+        </div>`;
+      });
+      html += `</div></div>`;
+    }
+
+    // Expense list
+    html += `<div style="font-size:12px;font-weight:600;margin-bottom:6px;color:#888">${allExpenses.length} expenses</div><div class="card">`;
+    allExpenses.forEach(e=>{
+      const d = (e.expenseDate&&String(e.expenseDate).trim())?fmtDate(e.expenseDate):fmtDate(e.createdAt);
       const cat = cleanCat(e.category);
       html += `<div class="expense-row">
         <div style="flex:1;min-width:0">
@@ -1942,6 +2024,7 @@ async function generateSummary() {
     results.innerHTML = html;
   } catch(ex) { results.innerHTML=`<div style="color:red;padding:12px;font-size:12px">Error: ${ex.message}</div>`; }
 }
+
 
 function toggleAdminMember(el) {
   el.classList.toggle("checked");
