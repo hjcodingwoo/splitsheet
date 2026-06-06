@@ -183,6 +183,7 @@
       <button class="tab" data-tab="settle" onclick="switchTab('settle',this)">Settle Up</button>
       <button class="tab" data-tab="members" onclick="switchTab('members',this)">Members</button>
       <button class="tab" data-tab="fx" onclick="switchTab('fx',this)">FX Rates</button>
+      <button id="tab-btn-admin" class="tab" data-tab="admin" onclick="switchTab('admin',this)" style="display:none">All Expenses</button>
     </div>
   </div>
 
@@ -438,6 +439,20 @@
   </div>
 </div>
 
+<!-- Tab: Admin All Expenses -->
+<div id="tab-admin" class="hidden px-4 pb-20" style="max-width:900px;margin:0 auto">
+  <div class="py-4" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span style="font-weight:600;font-family:var(--serif);font-size:1.1rem">All Expenses</span>
+    <input type="date" id="admin-date-from" onchange="renderAdminTab()" style="padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px">
+    <span style="font-size:12px;color:#aaa">to</span>
+    <input type="date" id="admin-date-to" onchange="renderAdminTab()" style="padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px">
+    <button onclick="resetAdminDates()" style="font-size:11px;padding:3px 8px;border:1px solid var(--rule);border-radius:3px;background:#fff;cursor:pointer;color:#888">Reset to 1 month</button>
+    <span id="admin-total" style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--ink);margin-left:auto"></span>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px" id="admin-member-filter"></div>
+  <div id="admin-expense-list" class="card"></div>
+</div>
+
 <!-- IMPORT STEP 1: PICK PAYER + UPLOAD -->
 <div id="modal-import-step1" class="modal-bg hidden" onclick="closeIfBg(event,'modal-import-step1')">
   <div class="modal" style="max-width:420px">
@@ -655,6 +670,7 @@ async function loadProject(projectId) {
 function renderProject() {
   document.getElementById("hdr-name").textContent=state.project.name;
   document.getElementById("hdr-members").textContent=state.members.map(m=>m.name).join(" · ")||"No members";
+  document.getElementById("tab-btn-admin").style.display = isAdmin ? "" : "none";
   renderExpenses();
 }
 
@@ -730,6 +746,18 @@ async function applyBatchEdit() {
   const moveProjectId = document.getElementById("batch-project").value;
   if (!cat && !payerId && !addMemberIds.length && !remMemberIds.length && !moveProjectId) return toast("Choose at least one field to change");
   const ids = [...batchSelected];
+  // Check for duplicates in selection
+  const dupWarnings = [];
+  ids.forEach(expenseId => {
+    const exp = state.expenses.find(e=>e.expenseId===expenseId);
+    if (!exp || !moveProjectId) return;
+    const dup = findDuplicateExpense({itemName:exp.itemName, amount:exp.amount, currency:exp.currency, expenseDate:exp.expenseDate});
+    if (dup && dup.expenseId !== expenseId) dupWarnings.push(exp.itemName);
+  });
+  if (dupWarnings.length && !confirm(`${dupWarnings.length} possible duplicate(s) detected:
+${dupWarnings.slice(0,3).join(", ")}${dupWarnings.length>3?"…":""}
+
+Proceed anyway?`)) return;
   showLoading(`Updating ${ids.length} expenses…`);
   try {
     for (let _pi=0; _pi<ids.length; _pi++) {
@@ -744,8 +772,9 @@ async function applyBatchEdit() {
       if (remMemberIds.length) split = split.filter(id=>!remMemberIds.includes(id));
       if (!split.length) split = [exp.payerId];
       if (moveProjectId && moveProjectId !== state.projectId) {
-        // Move: add to new project, delete from current
         const logDate = exp.logDate || todayISO();
+        const moveCat = cat||exp.category;
+        if (moveCat) { try { await api("addCategory",{projectId:moveProjectId,name:moveCat}); } catch(e){} }
         await api("addExpense",{projectId:moveProjectId,itemName:exp.itemName,amount:exp.amount,currency:exp.currency,payerId:payerId||exp.payerId,payerName,splitBetween:split,category:cat||exp.category,notes:exp.notes,customSplits:exp.customSplits||"",expenseDate:exp.expenseDate||"",logDate});
         await api("deleteExpense",{expenseId,projectId:state.projectId});
       } else {
@@ -1325,13 +1354,17 @@ async function openAddCategory(){
 
 // ── TABS ─────────────────────────────────────────────────
 function switchTab(name,btn){
-  ["expenses","totals","balances","settle","members","fx"].forEach(t=>{
+  ["expenses","totals","balances","settle","members","fx","admin"].forEach(t=>{
     document.getElementById("tab-"+t).classList.add("hidden");
     document.querySelector(`[data-tab="${t}"]`).classList.remove("active");
   });
   document.getElementById("tab-"+name).classList.remove("hidden");
   btn.classList.add("active");
   if(name==="totals") renderTotalsTab();
+  if(name==="admin") {
+    if (!document.getElementById("admin-date-from").value) resetAdminDates();
+    else renderAdminTab();
+  }
   if(name==="balances"||name==="settle") renderBalancesAndSettle();
   if(name==="members") renderMembersTab();
   if(name==="fx") renderFxTab();
@@ -1345,6 +1378,7 @@ function promptAdminLogin() {
     isAdmin = true;
     sessionStorage.setItem("sc_admin","1");
     toast("Admin mode on ✓");
+    document.getElementById("tab-btn-admin").style.display = "";
     renderExpenses();
   } else {
     isAdmin = false;
@@ -1750,6 +1784,87 @@ function findDuplicateExpense(row) {
   // Exact match (same name too) = stronger flag
   const exact = matches.find(e => e.itemName && row.itemName && e.itemName.toLowerCase().includes(row.itemName.toLowerCase().split(",")[0]));
   return exact || matches[0];
+}
+
+let adminSelectedMembers = new Set();
+
+function resetAdminDates() {
+  const to = new Date(); const from = new Date(); from.setMonth(from.getMonth()-1);
+  document.getElementById("admin-date-from").value = from.toISOString().slice(0,10);
+  document.getElementById("admin-date-to").value = to.toISOString().slice(0,10);
+  renderAdminTab();
+}
+
+async function renderAdminTab() {
+  const list = document.getElementById("admin-expense-list");
+  const fromEl = document.getElementById("admin-date-from");
+  const toEl = document.getElementById("admin-date-to");
+  if (!fromEl.value || !toEl.value) resetAdminDates();
+  const from = new Date(fromEl.value); from.setHours(0,0,0,0);
+  const to = new Date(toEl.value); to.setHours(23,59,59,999);
+  list.innerHTML = `<div style="text-align:center;padding:20px;color:#aaa;font-size:13px">Loading…</div>`;
+  try {
+    // Fetch all projects
+    const res = await api("getAllProjects");
+    const allProjects = (res.projects||[]).filter(p=>!p.archived);
+    // Build member filter from all projects (deduplicated by name)
+    const memberMap = {}; // name -> [{projectId, memberId}]
+    allProjects.forEach(p=>(p.members||[]).forEach(m=>{
+      if (!memberMap[m.name]) memberMap[m.name] = [];
+      memberMap[m.name].push({projectId:p.projectId, memberId:m.memberId});
+    }));
+    // Render member filter chips
+    const mf = document.getElementById("admin-member-filter");
+    if (mf && !mf.children.length) {
+      mf.innerHTML = `<span style="font-size:11px;color:#aaa">Filter by payer:</span> `+
+        Object.keys(memberMap).sort().map(name=>`<div class="check-item" data-name="${esc(name)}" onclick="toggleAdminMember(this)" style="font-size:11px;padding:3px 10px;cursor:pointer">${esc(name)}</div>`).join("");
+    }
+    const selectedNames = [...document.querySelectorAll("#admin-member-filter .check-item.checked")].map(el=>el.dataset.name);
+    // Fetch expenses from all projects
+    let allExpenses = [];
+    for (const proj of allProjects) {
+      try {
+        const expRes = await api("getExpenses",{projectId:proj.projectId});
+        (expRes.expenses||[]).forEach(e=>{ e._projectName=proj.name; e._projectId=proj.projectId; allExpenses.push(e); });
+      } catch(e){}
+    }
+    // Filter by date
+    allExpenses = allExpenses.filter(e=>{
+      const d = new Date(e.expenseDate||e.createdAt);
+      return d>=from && d<=to;
+    });
+    // Filter by selected members
+    if (selectedNames.length) {
+      allExpenses = allExpenses.filter(e=>selectedNames.includes(e.payerName));
+    }
+    // Sort newest first
+    allExpenses.sort((a,b)=>new Date(b.expenseDate||b.createdAt)-new Date(a.expenseDate||a.createdAt));
+    // Total
+    let total = 0;
+    allExpenses.forEach(e=>{ total += parseFloat(e.amount)||0; });
+    document.getElementById("admin-total").textContent = allExpenses.length ? `${allExpenses.length} expenses` : "No expenses";
+    if (!allExpenses.length) { list.innerHTML=`<div style="text-align:center;padding:20px;color:#aaa;font-size:13px">No expenses in this range.</div>`; return; }
+    list.innerHTML = allExpenses.map(e=>{
+      const expDate = (e.expenseDate&&String(e.expenseDate).trim()) ? fmtDate(e.expenseDate) : fmtDate(e.createdAt);
+      const cat = cleanCat(e.category);
+      return `<div class="expense-row">
+        <div style="flex:1;min-width:0">
+          <div class="font-medium text-sm">${esc(e.itemName)} <span style="font-size:10px;color:#aaa;font-family:var(--mono)">[${esc(e._projectName)}]</span></div>
+          <div class="text-xs text-gray-400 mt-0.5">Paid by <strong>${esc(e.payerName)}</strong>${cat!=="Uncategorised"?` · ${esc(cat)}`:""}</div>
+          <div style="font-family:var(--mono);font-size:10px;color:#bbb;margin-top:2px">${expDate}</div>
+        </div>
+        <div class="text-right">
+          <div class="font-medium">${formatAmt(e.amount)}</div>
+          <span class="pill pill-currency">${e.currency||""}</span>
+        </div>
+      </div>`;
+    }).join("");
+  } catch(ex) { list.innerHTML=`<div style="color:red;padding:12px;font-size:12px">Error: ${ex.message}</div>`; }
+}
+
+function toggleAdminMember(el) {
+  el.classList.toggle("checked");
+  renderAdminTab();
 }
 
 function buildProjectSelector(i, row) {
