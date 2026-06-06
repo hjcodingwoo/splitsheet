@@ -590,6 +590,14 @@ function parseProjectInput(val) { try { const u=new URL(val); const p=u.searchPa
 function toBase(amount, ccy) { const base=state.currency; ccy=(ccy||base).toUpperCase(); if(ccy===base) return parseFloat(amount)||0; const rate=state.fxRates[ccy]; if(rate===undefined||rate===null) return null; return (parseFloat(amount)||0)*rate; }
 function cleanCat(raw) { const s=String(raw||"").trim(); return (s&&s!=="0")?s:"Uncategorised"; }
 function fmtDate(d) { if(!d) return "—"; try { return new Date(d).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}); } catch { return d; } }
+function toISODate(d) {
+  if (!d) return "";
+  try {
+    const dt = new Date(d);
+    if (isNaN(dt)) return "";
+    return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");
+  } catch { return ""; }
+}
 function todayISO() { return new Date().toISOString().split('T')[0]; }
 
 // ── TOTALS BUILDER ────────────────────────────────────────
@@ -867,20 +875,24 @@ function openEditExpense(expenseId) {
   editingExpenseId=expenseId;
   document.getElementById("exp-modal-title").textContent="Edit expense";
   document.getElementById("save-exp-btn").textContent="Update";
+  // populateExpenseModal first — it rebuilds payer/category/split DOM
+  populateExpenseModal();
+  // NOW set values (overrides defaults set by populateExpenseModal)
   document.getElementById("exp-name").value=exp.itemName||"";
   document.getElementById("exp-notes").value=exp.notes||"";
   document.getElementById("exp-amount").value=exp.amount||"";
   document.getElementById("exp-currency").value=exp.currency||state.currency;
-  splitMode="equal"; populateExpenseModal();
   document.getElementById("exp-payer").value=exp.payerId;
   const catVal=(exp.category&&exp.category.trim()&&exp.category!=="0")?exp.category.trim():"";
   document.getElementById("exp-category").value=catVal;
   const splitIds=Array.isArray(exp.splitBetween)?exp.splitBetween.filter(s=>s):String(exp.splitBetween).split(",").filter(s=>s);
   document.querySelectorAll("#exp-split .check-item").forEach(el=>{
-    const checked=splitIds.includes(el.dataset.id); el.classList.toggle("checked",checked); el.querySelector("input").checked=checked;
+    const checked=splitIds.includes(el.dataset.id);
+    el.classList.toggle("checked",checked);
+    el.querySelector("input").checked=checked;
   });
-  document.getElementById("exp-date").value=exp.expenseDate||new Date(exp.createdAt).toISOString().split('T')[0];
-  document.getElementById("exp-logdate").value=exp.logDate||new Date(exp.createdAt).toISOString().split('T')[0];
+  document.getElementById("exp-date").value=toISODate(exp.expenseDate)||toISODate(exp.createdAt);
+  document.getElementById("exp-logdate").value=toISODate(exp.logDate)||toISODate(exp.createdAt);
   onExpCurrencyChange(exp.currency||state.currency);
   if (exp.customSplits) setSplitMode("custom"); else setSplitMode("equal");
   // Show move-to-project only when editing
@@ -958,7 +970,8 @@ async function saveExpense() {
       else { const expRes=await api("getExpenses",{projectId:state.projectId}); state.expenses=expRes.expenses; }
     }
     renderExpenses();
-    closeModal("modal-expense"); toast(editingExpenseId?"Updated ✓":"Expense added ✓"); editingExpenseId=null;
+    const wasEditing=!!editingExpenseId;
+    closeModal("modal-expense"); toast(wasEditing?"Updated ✓":"Expense added ✓"); editingExpenseId=null;
   } catch(e){toast(e.message);}
   finally{btn.disabled=false;btn.textContent=editingExpenseId?"Update":"Save expense";}
 }
