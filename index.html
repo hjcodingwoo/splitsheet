@@ -941,9 +941,14 @@ async function saveExpense() {
     if(editingExpenseId){
       const moveToProject = document.getElementById("move-project-sel")?.value;
       if (moveToProject && moveToProject !== state.projectId) {
-        // Move: add to new project then delete from current
         const logDate = state.expenses.find(e=>e.expenseId===editingExpenseId)?.logDate || todayISO();
-        await api("addExpense",{projectId:moveToProject,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits:customSplits||"",expenseDate,logDate});
+        const targetSplit = [...document.querySelectorAll("#move-split-members .check-item.checked")].map(el=>el.dataset.id);
+        const moveSplit = targetSplit.length ? targetSplit : splitBetween;
+        const newCatName = (document.getElementById("move-cat-new")?.value||"").trim();
+        const selCat = document.getElementById("move-cat-sel")?.value||"";
+        const moveCategory = newCatName || selCat || "";
+        if (moveCategory) { try { await api("addCategory",{projectId:moveToProject,name:moveCategory}); } catch(e){} }
+        await api("addExpense",{projectId:moveToProject,itemName,amount,currency,payerId,payerName,splitBetween:moveSplit,category:moveCategory,notes,customSplits:customSplits||"",expenseDate,logDate});
         await api("deleteExpense",{expenseId:editingExpenseId,projectId:state.projectId});
       } else {
         const logDate=v("exp-logdate")||todayISO();
