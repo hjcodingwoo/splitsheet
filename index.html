@@ -965,17 +965,16 @@ async function openEditExpense(expenseId) {
 function checkExpenseFields() {
   const btn = document.getElementById("save-exp-btn");
   if (!btn) return;
-  const name = v("exp-name").trim();
-  const amount = parseFloat(v("exp-amount"));
-  const allOk = name && amount > 0;
-  if (allOk) {
-    btn.style.opacity = "1";
-    btn.style.cursor = "pointer";
-    btn.textContent = editingExpenseId ? "Update" : "Save expense";
-  } else {
-    btn.style.opacity = "0.5";
-    btn.style.cursor = "not-allowed";
-    btn.textContent = editingExpenseId ? "Update (fill required fields)" : "Save expense (fill required fields)";
+  const name = (document.getElementById("exp-name")?.value||"").trim();
+  const amount = parseFloat(document.getElementById("exp-amount")?.value||"0");
+  const allOk = name.length > 0 && amount > 0;
+  btn.disabled = !allOk;
+  btn.style.opacity = allOk ? "1" : "0.5";
+  btn.style.cursor = allOk ? "pointer" : "not-allowed";
+  if (!btn.innerHTML.includes("spin")) {
+    btn.textContent = editingExpenseId
+      ? (allOk ? "Update" : "Update — fill name & amount")
+      : (allOk ? "Save expense" : "Save — fill name & amount");
   }
 }
 
@@ -1005,8 +1004,8 @@ async function saveExpense() {
         payerSel=document.getElementById("exp-payer"),
         payerId=payerSel.value,payerName=payerSel.options[payerSel.selectedIndex].text,
         splitBetween=[...document.querySelectorAll("#exp-split .check-item.checked")].map(el=>el.dataset.id);
-  if(!itemName) return toast("Enter an item name");
-  if(!amount||amount<=0) return toast("Enter a valid amount");
+  if(!itemName) { toast("Enter an item name"); checkExpenseFields(); return; }
+  if(!amount||amount<=0) { toast("Enter a valid amount"); checkExpenseFields(); return; }
   const resolvedDate = expenseDate || todayISO(); // default to today if field empty
   // resolvedSplit: use checked members, fallback to all members (handles edit case where checks may not re-render)
   const resolvedSplit = splitBetween.length ? splitBetween : state.members.map(m=>m.memberId);
@@ -2283,11 +2282,12 @@ async function loadImportRowContext(selectEl, rowIdx) {
       else card.appendChild(ctx);
     }
     const members = res.members || [];
+    const catAddHtml = `<div style="margin-top:6px"><label style="font-size:11px;color:#888;font-weight:500">Add/choose category:</label><div style="display:flex;gap:6px;margin-top:3px"><select data-ctx-cat style="flex:1;padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px;background:#fff"><option value="">— none —</option>${(res.categories||[]).map(cat=>`<option value="${esc(cat.name)}">${esc(cat.name)}</option>`).join("")}</select><input data-ctx-cat-new type="text" placeholder="or new…" style="width:80px;padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px"></div></div>`;
     ctx.innerHTML = `<div style="color:#888;font-weight:500;margin-bottom:4px">Split between (${esc(res.project?.name||projectId)}):</div>` +
       `<div style="display:flex;flex-wrap:wrap;gap:4px">` +
-      members.map(m=>`<div class="check-item checked" data-id="${m.memberId}" onclick="toggleBatchChk(this);importRows[${rowIdx}].splitMembers=[...this.parentNode.querySelectorAll('.check-item.checked')].map(el=>el.dataset.id)" style="font-size:11px;padding:2px 8px;cursor:pointer">${esc(m.name)}</div>`).join("") +
-      `</div>`;
-    // Default splitMembers to all members of target project
+      members.map(m=>`<div class="check-item checked" data-id="${m.memberId}" onclick="toggleBatchChk(this)" style="font-size:11px;padding:2px 8px;cursor:pointer">${esc(m.name)}</div>`).join("") +
+      `</div>` + catAddHtml;
+    // Default splitMembers to all members; will be read from DOM at save time
     importRows[rowIdx].splitMembers = members.map(m=>m.memberId);
   } catch(e) { console.error("loadImportRowContext error:", e); toast("Could not load project context"); }
 }
@@ -2332,6 +2332,22 @@ async function saveOneImportRow(i) {
   const btn = card?.querySelector(".save-next-btn");
   if (btn) { btn.textContent="Saving…"; btn.disabled=true; }
   const targetProjectId = importRows[i].projectId || state.projectId;
+  // Re-read split from DOM context widget if present
+  const visCard = document.querySelectorAll("#import-review-list > div")[importRows.slice(0,i).filter(r=>!r.deleted).length];
+  const ctxDiv = visCard?.querySelector(".target-project-ctx");
+  if (ctxDiv) {
+    const checkedIds = [...ctxDiv.querySelectorAll(".check-item.checked")].map(el=>el.dataset.id).filter(Boolean);
+    if (checkedIds.length) importRows[i].splitMembers = checkedIds;
+    // Read category from ctx
+    const ctxCatNew = (ctxDiv.querySelector("[data-ctx-cat-new]")?.value||"").trim();
+    const ctxCatSel = ctxDiv.querySelector("[data-ctx-cat]")?.value||"";
+    const ctxCat = ctxCatNew || ctxCatSel;
+    if (ctxCat) {
+      // Add category to target project
+      try { await api("addCategory",{projectId:targetProjectId,name:ctxCat}); } catch(e){}
+      importRows[i].category = ctxCat;
+    }
+  }
   const splitBetween = (importRows[i].splitMembers?.length) ? importRows[i].splitMembers : state.members.map(m=>m.memberId);
   if (row.fxRate && row.currency && row.currency !== state.currency) {
     try { await api("setFxRate",{projectId:targetProjectId,currency:row.currency,rate:row.fxRate}); state.fxRates[row.currency]=row.fxRate; } catch(e){}
