@@ -1566,7 +1566,7 @@ Rules:
     });
     if (!response.ok) throw new Error("API error "+response.status);
     const data = await response.json();
-    if (data.error) throw new Error(data.error.message||data.error||"API error");
+    if (data.error) throw new Error(data.error.message||data.error.error_description||(typeof data.error==="string"?data.error:JSON.stringify(data.error)));
     const text = (data.content?.[0]?.text || "").replace(/```json|```/g,"").trim();
     if (!text) throw new Error("No response from image scan");
     let parsed;
@@ -1592,7 +1592,7 @@ Rules:
       }
     }
     toast("Receipt scanned ✓ — review the details");
-  } catch(e) { console.error("Receipt scan error:",e); toast("Scan failed: "+(e.message||"unknown")+" — fill in manually"); }
+  } catch(e) { console.error("Receipt scan error:",e); const msg=typeof e==="string"?e:(e.message||JSON.stringify(e)||"unknown"); toast("Scan failed: "+msg+" — fill in manually"); }
   finally { document.getElementById("receipt-scanning").style.display="none"; }
 }
 
