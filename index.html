@@ -1536,7 +1536,7 @@ async function scanReceipt(input) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-5",
         max_tokens: 400,
         messages: [{
           role: "user",
@@ -1682,7 +1682,7 @@ function parseWiseCsv(text) {
 async function callAI(contentBlocks) {
   const response = await fetch("/api/scan-receipt", {
     method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:4000,
+    body: JSON.stringify({model:"claude-sonnet-4-5", max_tokens:4000,
       messages:[{role:"user",content:contentBlocks}]})
   });
   if (!response.ok) throw new Error(`API ${response.status}`);
