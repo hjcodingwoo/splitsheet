@@ -705,14 +705,17 @@ async function settleExpense(expenseId) {
   if (!exp) return toast("Expense not found");
   const payer = state.members.find(m=>m.memberId===exp.payerId);
   if (!payer) return toast("Payer not found");
-  const debtors = (Array.isArray(exp.splitBetween)?exp.splitBetween:String(exp.splitBetween).split(","))
-    .filter(id=>id && id!==exp.payerId);
+  const splitIds = (Array.isArray(exp.splitBetween)?exp.splitBetween:String(exp.splitBetween).split(",")).filter(id=>id);
+  const debtors = splitIds.filter(id=>id!==exp.payerId);
   if (!debtors.length) return toast("No one owes on this expense");
-  const perPerson = parseFloat((exp.amount / (debtors.length + 1)).toFixed(2));
+  // Each debtor owes their equal share of the total split
+  const totalPeople = splitIds.length || (debtors.length + 1);
+  const perPerson = parseFloat((exp.amount / totalPeople).toFixed(2));
   const names = debtors.map(id=>state.members.find(m=>m.memberId===id)?.name||id).join(", ");
+  const amtStr = debtors.length===1 ? `${formatAmt(perPerson)} ${exp.currency||state.currency}` : `${formatAmt(perPerson)} ${exp.currency||state.currency} each`;
   if (!confirm(`Mark as settled?
-${names} → ${payer.name}
-${formatAmt(perPerson)} ${exp.currency||state.currency} each`)) return;
+${names} pays ${payer.name}
+${amtStr}`)) return;
   showLoading("Recording settlement…");
   try {
     for (const debtorId of debtors) {
@@ -959,6 +962,23 @@ async function openEditExpense(expenseId) {
   showModal("modal-expense");
 }
 
+function checkExpenseFields() {
+  const btn = document.getElementById("save-exp-btn");
+  if (!btn) return;
+  const name = v("exp-name").trim();
+  const amount = parseFloat(v("exp-amount"));
+  const allOk = name && amount > 0;
+  if (allOk) {
+    btn.style.opacity = "1";
+    btn.style.cursor = "pointer";
+    btn.textContent = editingExpenseId ? "Update" : "Save expense";
+  } else {
+    btn.style.opacity = "0.5";
+    btn.style.cursor = "not-allowed";
+    btn.textContent = editingExpenseId ? "Update (fill required fields)" : "Save expense (fill required fields)";
+  }
+}
+
 function populateExpenseModal() {
   const payerSel=document.getElementById("exp-payer");
   payerSel.innerHTML=state.members.map(m=>`<option value="${m.memberId}">${esc(m.name)}</option>`).join("");
@@ -970,6 +990,12 @@ function populateExpenseModal() {
   splitDiv.querySelectorAll(".check-item").forEach(el=>{
     el.addEventListener("click",e=>{e.preventDefault();el.classList.toggle("checked");el.querySelector("input").checked=el.classList.contains("checked");if(splitMode==="custom")renderCustomSplit();});
   });
+  // Wire required field listeners
+  ["exp-name","exp-amount"].forEach(id=>{
+    const el = document.getElementById(id);
+    if (el) el.oninput = checkExpenseFields;
+  });
+  setTimeout(checkExpenseFields, 0);
 }
 
 async function saveExpense() {
