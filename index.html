@@ -1864,6 +1864,10 @@ function parseCsvRows(text) {
 // Unmatched payer/split names fall back to safe defaults and flag the row needs-input with a reason;
 // an unmatched or absent project silently defaults to the current project (matches how the app
 // otherwise treats "no project given").
+// getAllProjects doesn't return each project's categories (only members), and its members list can
+// be stale — so this always goes through ensureRowContext/getProject for the resolved project to get
+// authoritative members+categories, same as everything else that touches a row's non-current project.
+// Returns null (a hard failure, not "needs input") if that fetch fails, so the caller can abort cleanly.
 async function resolveDirectRow(raw, stmtDate) {
   const row = {
     itemName: (raw.itemName||"").substring(0,60),
@@ -1879,13 +1883,20 @@ async function resolveDirectRow(raw, stmtDate) {
   }
   const projectId = targetProject ? targetProject.projectId : state.projectId;
   const projectName = targetProject ? targetProject.name : (state.project?.name||projectId);
-  const members = targetProject ? (targetProject.members||[]) : state.members;
   row.projectId = projectId;
+  const ctxOk = await ensureRowContext(projectId);
+  if (!ctxOk) {
+    console.error(`Direct-parse: could not load project '${projectName}' (${projectId}) for row "${row.itemName}" — aborting direct-parse for this file`);
+    return null;
+  }
+  const members = getRowMembers({projectId});
   if (raw.payerName) {
     const m = members.find(mm=>mm.name.toLowerCase()===raw.payerName.trim().toLowerCase());
     if (m) { row.payerId = m.memberId; row.payerName = m.name; }
     else {
-      reasons.push(`payer '${raw.payerName}' not found in project '${projectName}'`);
+      const reason = `payer '${raw.payerName}' not found in project '${projectName}'`;
+      reasons.push(reason);
+      console.log(`Direct-parse: row "${row.itemName}" needs input — ${reason}`);
       row.payerId = members[0]?.memberId||""; row.payerName = members[0]?.name||"";
     }
   } else if (targetProject) {
@@ -1899,13 +1910,16 @@ async function resolveDirectRow(raw, stmtDate) {
     const names = raw.splitNames.split(/[;,]/).map(s=>s.trim()).filter(Boolean);
     const matched = names.map(n=>members.find(mm=>mm.name.toLowerCase()===n.toLowerCase())).filter(Boolean);
     const unmatched = names.filter(n=>!members.some(mm=>mm.name.toLowerCase()===n.toLowerCase()));
-    if (unmatched.length) reasons.push(`split '${unmatched.join(", ")}' not found in project '${projectName}'`);
+    if (unmatched.length) {
+      const reason = `split '${unmatched.join(", ")}' not found in project '${projectName}'`;
+      reasons.push(reason);
+      console.log(`Direct-parse: row "${row.itemName}" needs input — ${reason}`);
+    }
     row.splitMembers = matched.length ? matched.map(m=>m.memberId) : members.map(m=>m.memberId);
   } else {
     row.splitMembers = members.map(m=>m.memberId);
   }
   if (raw.category) {
-    await ensureRowContext(projectId);
     const categories = getRowCategories({projectId});
     let cat = categories.find(c=>c.name.toLowerCase()===raw.category.trim().toLowerCase());
     if (!cat) {
@@ -1914,7 +1928,7 @@ async function resolveDirectRow(raw, stmtDate) {
         cat = {categoryId:res.categoryId,name:res.name};
         if (projectId===state.projectId) { if (!state.categories.find(c=>c.name===cat.name)) state.categories.push(cat); }
         else if (importRowContextCache[projectId]?.categories && !importRowContextCache[projectId].categories.find(c=>c.name===cat.name)) importRowContextCache[projectId].categories.push(cat);
-      } catch(e) { console.log("Auto-create category failed (non-blocking):", e.message); }
+      } catch(e) { console.error(`Direct-parse: auto-create category '${raw.category}' failed for row "${row.itemName}" (non-blocking):`, e.message); }
     }
     row.category = cat ? cat.name : raw.category.trim();
   } else {
@@ -1925,7 +1939,8 @@ async function resolveDirectRow(raw, stmtDate) {
   row._resolved = true;
   return row;
 }
-// Returns null (meaning "not this format") unless the header row has at least itemName+amount recognized.
+// Returns null (meaning "not this format", or a hard failure) unless the header row has at least
+// itemName+amount recognized AND every row resolves without a fetch error.
 async function parseDirectHeaderCsv(text, stmtDate) {
   const rows = parseCsvRows(text);
   if (rows.length < 2) return null;
@@ -1934,15 +1949,30 @@ async function parseDirectHeaderCsv(text, stmtDate) {
     const key = String(h||"").toLowerCase().replace(/[^a-z]/g,"");
     if (DIRECT_HEADER_FIELDS[key]) headerMap[DIRECT_HEADER_FIELDS[key]] = idx;
   });
-  if (headerMap.itemName===undefined || headerMap.amount===undefined) return null;
-  if (!allProjectsCache.length) { try { const pr=await api("getAllProjects"); allProjectsCache=pr.projects||[]; } catch(e){} }
+  if (headerMap.itemName===undefined || headerMap.amount===undefined) {
+    console.log("Direct-parse: header row has no recognized itemName+amount columns, skipping direct-parse");
+    return null;
+  }
+  if (!allProjectsCache.length) {
+    try {
+      const pr = await api("getAllProjects");
+      allProjectsCache = pr.projects || [];
+    } catch(e) {
+      console.error("Direct-parse: getAllProjects failed, aborting direct-parse for this file:", e.message);
+      return null;
+    }
+  }
+  const dataRows = rows.slice(1).filter(cols=>cols.some(c=>c && c.trim()));
   const results = [];
-  for (let i=1;i<rows.length;i++) {
-    const cols = rows[i];
-    if (!cols.some(c=>c && c.trim())) continue;
+  let rejected = 0;
+  for (const cols of dataRows) {
     const itemName = (cols[headerMap.itemName]||"").trim();
     const amount = parseFloat(String(cols[headerMap.amount]||"").replace(/[^0-9.\-]/g,""));
-    if (!itemName || !amount || amount<=0) continue;
+    if (!itemName || !amount || amount<=0) {
+      rejected++;
+      console.log("Direct-parse: rejecting row — blank itemName or invalid amount:", cols);
+      continue;
+    }
     const raw = {
       itemName, amount,
       currency: headerMap.currency!==undefined ? cols[headerMap.currency] : "",
@@ -1953,8 +1983,15 @@ async function parseDirectHeaderCsv(text, stmtDate) {
       projectName: headerMap.project!==undefined ? cols[headerMap.project] : "",
       notes: headerMap.notes!==undefined ? cols[headerMap.notes] : "",
     };
-    results.push(await resolveDirectRow(raw, stmtDate));
+    const resolved = await resolveDirectRow(raw, stmtDate);
+    if (!resolved) {
+      // Hard failure (e.g. getProject fetch failed) — resolveDirectRow already logged why.
+      console.error(`Direct-parse: checking ${dataRows.length} rows, resolved ${results.length}, rejected ${rejected} — aborting after a hard failure, falling back to other parsers`);
+      return null;
+    }
+    results.push(resolved);
   }
+  console.log(`Direct-parse: checking ${dataRows.length} rows, resolved ${results.length}, rejected ${rejected}`);
   return results.length ? results : null;
 }
 
@@ -2373,15 +2410,30 @@ function toggleAdminMember(el) {
 
 // ── IMPORT REVIEW — bulk grid ─────────────────────────────
 let importRowContextCache = {}; // projectId -> {members, categories}, populated lazily when a row targets another project
+let importRowContextInflight = {}; // projectId -> in-flight getProject Promise<boolean>, so concurrent callers share one fetch
+// Returns true once projectId's members/categories are cached (or it's the current project, needing no fetch),
+// false if the getProject fetch failed — callers that need a hard guarantee (like direct-parse resolution)
+// should check this return value instead of just reading the cache afterward.
 async function ensureRowContext(projectId) {
-  if (!projectId || projectId === state.projectId || importRowContextCache[projectId]) return;
-  importRowContextCache[projectId] = { loading: true };
-  try {
-    const res = await api("getProject", {projectId});
-    importRowContextCache[projectId] = { members: res.members||[], categories: res.categories||[] };
-  } catch(e) { delete importRowContextCache[projectId]; return; }
-  renderImportReview();
-  refreshBulkMemberCategoryLists();
+  if (!projectId || projectId === state.projectId) return true;
+  if (importRowContextCache[projectId]) return true;
+  if (importRowContextInflight[projectId]) return importRowContextInflight[projectId];
+  const promise = (async () => {
+    try {
+      const res = await api("getProject", {projectId});
+      importRowContextCache[projectId] = { members: res.members||[], categories: res.categories||[] };
+      renderImportReview();
+      refreshBulkMemberCategoryLists();
+      return true;
+    } catch(e) {
+      console.error("ensureRowContext: getProject failed for project", projectId, "-", e.message);
+      return false;
+    } finally {
+      delete importRowContextInflight[projectId];
+    }
+  })();
+  importRowContextInflight[projectId] = promise;
+  return promise;
 }
 function getRowMembers(row) {
   if (row.projectId && row.projectId !== state.projectId) {
