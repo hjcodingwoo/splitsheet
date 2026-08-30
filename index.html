@@ -1860,15 +1860,16 @@ function parseCsvRows(text) {
     return cols.map(c=>c.replace(/^"|"$/g,""));
   });
 }
-// Resolves one raw parsed row's payer/split/project/category by case-insensitive name match.
-// Unmatched payer/split names fall back to safe defaults and flag the row needs-input with a reason;
-// an unmatched or absent project silently defaults to the current project (matches how the app
-// otherwise treats "no project given").
-// getAllProjects doesn't return each project's categories (only members), and its members list can
-// be stale — so this always goes through ensureRowContext/getProject for the resolved project to get
-// authoritative members+categories, same as everything else that touches a row's non-current project.
+// Resolves one raw parsed row's payer/split/category by case-insensitive name match against
+// the given project. `targetProject` is pre-resolved by parseDirectHeaderCsv (once per unique
+// projectName in the file, not per row) — this function never searches allProjectsCache itself.
+// A projectName that was given but didn't match anything does NOT silently reroute to the
+// current project: the row keeps the current project (so it's still visible/editable) but is
+// flagged needs-input with the reason, same treatment as an unmatched payer/split name.
+// Always goes through ensureRowContext/getProject for the resolved project's members+categories
+// (allProjectsCache carries no categories at all, and its members list can be stale).
 // Returns null (a hard failure, not "needs input") if that fetch fails, so the caller can abort cleanly.
-async function resolveDirectRow(raw, stmtDate) {
+async function resolveDirectRow(raw, stmtDate, targetProject) {
   const row = {
     itemName: (raw.itemName||"").substring(0,60),
     amount: raw.amount,
@@ -1877,12 +1878,20 @@ async function resolveDirectRow(raw, stmtDate) {
     expenseDate: (raw.expenseDate && /^\d{4}-\d{2}-\d{2}/.test(raw.expenseDate)) ? raw.expenseDate.substring(0,10) : stmtDate,
   };
   const reasons = [];
-  let targetProject = null;
-  if (raw.projectName) {
-    targetProject = (allProjectsCache||[]).find(p=>!p.archived && p.name.toLowerCase()===raw.projectName.trim().toLowerCase());
+  let projectId, projectName;
+  if (raw.projectName && !targetProject) {
+    projectId = state.projectId;
+    projectName = state.project?.name || projectId;
+    const reason = `project '${raw.projectName}' not found — pick one`;
+    reasons.push(reason);
+    console.log(`Direct-parse: row "${row.itemName}" needs input — ${reason}`);
+  } else if (targetProject) {
+    projectId = targetProject.projectId;
+    projectName = targetProject.name;
+  } else {
+    projectId = state.projectId;
+    projectName = state.project?.name || projectId;
   }
-  const projectId = targetProject ? targetProject.projectId : state.projectId;
-  const projectName = targetProject ? targetProject.name : (state.project?.name||projectId);
   row.projectId = projectId;
   const ctxOk = await ensureRowContext(projectId);
   if (!ctxOk) {
@@ -1949,10 +1958,13 @@ async function parseDirectHeaderCsv(text, stmtDate) {
     const key = String(h||"").toLowerCase().replace(/[^a-z]/g,"");
     if (DIRECT_HEADER_FIELDS[key]) headerMap[DIRECT_HEADER_FIELDS[key]] = idx;
   });
+  console.log("Direct-parse headers matched:", headerMap);
   if (headerMap.itemName===undefined || headerMap.amount===undefined) {
     console.log("Direct-parse: header row has no recognized itemName+amount columns, skipping direct-parse");
     return null;
   }
+  // Rely on the fresh cache runImportScan already loaded; refresh here too as a safety net
+  // (e.g. this parser being reused from a context that skipped that step).
   if (!allProjectsCache.length) {
     try {
       const pr = await api("getAllProjects");
@@ -1963,7 +1975,7 @@ async function parseDirectHeaderCsv(text, stmtDate) {
     }
   }
   const dataRows = rows.slice(1).filter(cols=>cols.some(c=>c && c.trim()));
-  const results = [];
+  const rawRows = [];
   let rejected = 0;
   for (const cols of dataRows) {
     const itemName = (cols[headerMap.itemName]||"").trim();
@@ -1973,7 +1985,7 @@ async function parseDirectHeaderCsv(text, stmtDate) {
       console.log("Direct-parse: rejecting row — blank itemName or invalid amount:", cols);
       continue;
     }
-    const raw = {
+    rawRows.push({
       itemName, amount,
       currency: headerMap.currency!==undefined ? cols[headerMap.currency] : "",
       category: headerMap.category!==undefined ? cols[headerMap.category] : "",
@@ -1982,16 +1994,43 @@ async function parseDirectHeaderCsv(text, stmtDate) {
       splitNames: headerMap.splitBetween!==undefined ? cols[headerMap.splitBetween] : "",
       projectName: headerMap.project!==undefined ? cols[headerMap.project] : "",
       notes: headerMap.notes!==undefined ? cols[headerMap.notes] : "",
-    };
-    const resolved = await resolveDirectRow(raw, stmtDate);
+    });
+  }
+  // Resolve each unique projectName in the file ONCE up front (not per row) and warm the
+  // members+categories cache for it, so every row referencing that project reuses one fetch.
+  const uniqueProjectNames = [...new Set(rawRows.map(r=>r.projectName).filter(Boolean))];
+  const projectByName = {};
+  for (const pname of uniqueProjectNames) {
+    const proj = (allProjectsCache||[]).find(p=>!p.archived && p.name.toLowerCase()===pname.trim().toLowerCase());
+    projectByName[pname] = proj || null;
+    if (proj) {
+      const ok = await ensureRowContext(proj.projectId);
+      if (!ok) {
+        console.error(`Direct-parse: could not load project '${proj.name}' — aborting direct-parse for this file`);
+        return null;
+      }
+    }
+  }
+  const results = [];
+  const debugRows = [];
+  for (let i=0;i<rawRows.length;i++) {
+    const raw = rawRows[i];
+    const targetProject = raw.projectName ? projectByName[raw.projectName] : null;
+    console.log("Row", i, "projectName:", raw.projectName||"(none)", "→ matched:", targetProject?.name || "NONE (fallback to current)");
+    const resolved = await resolveDirectRow(raw, stmtDate, targetProject);
     if (!resolved) {
       // Hard failure (e.g. getProject fetch failed) — resolveDirectRow already logged why.
       console.error(`Direct-parse: checking ${dataRows.length} rows, resolved ${results.length}, rejected ${rejected} — aborting after a hard failure, falling back to other parsers`);
       return null;
     }
     results.push(resolved);
+    debugRows.push({item: raw.itemName, fileProject: raw.projectName||"(current)", resolvedProject: resolved.needsInputReason && raw.projectName && !targetProject ? "NEEDS INPUT" : resolved.projectId});
   }
+  const counts = {};
+  results.forEach(r=>{ counts[r.projectId] = (counts[r.projectId]||0)+1; });
   console.log(`Direct-parse: checking ${dataRows.length} rows, resolved ${results.length}, rejected ${rejected}`);
+  console.log("Direct-parse done:", results.length, "rows, breakdown by project:", counts);
+  try { console.table(debugRows); } catch(e) { console.log(debugRows); }
   return results.length ? results : null;
 }
 
@@ -2112,9 +2151,12 @@ async function runImportScan() {
   const stmtDate  = document.getElementById("import-stmt-date").value;
   document.getElementById("import-scanning").style.display = "block";
   document.getElementById("import-scan-btn").disabled = true;
-  // Direct-parse rows resolve project/payer/split names against all projects, so this cache
-  // needs to be ready before scanOneFile runs, not just before rendering the review grid.
-  if (!allProjectsCache.length) { try { const pr=await api("getAllProjects"); allProjectsCache=pr.projects||[]; } catch(e){} }
+  // Always refresh — a stale allProjectsCache (edited elsewhere: another device, a direct
+  // Sheet edit, since the last time this project list was loaded) is exactly how direct-parse
+  // project-name matching used to fail silently and dump rows into the wrong project.
+  try { const pr = await api("getAllProjects"); allProjectsCache = pr.projects || []; }
+  catch(e) { console.error("import: getAllProjects refresh failed", e.message); }
+  importRowContextCache = {}; // per-project member/category cache — also can't be allowed to carry stale data across imports
   let allRows = [];
   try {
     for (let i = 0; i < importFileQueue.length; i++) {
@@ -2124,7 +2166,6 @@ async function runImportScan() {
     if (!allRows.length) { toast("No transactions found — check the file has transaction rows"); return; }
     // Direct-parsed rows (r._resolved) already set splitMembers/expenseDate deliberately — don't clobber them.
     importRows = allRows.map((r,i)=>({...r,id:i,deleted:false,splitMembers:r.splitMembers||state.members.map(m=>m.memberId),expenseDate:(r.expenseDate&&r.expenseDate.length===10)?r.expenseDate:stmtDate}));
-    importRowContextCache = {};
     try {
       const rulesRes = await api("getRules");
       const rules = rulesRes.rules || [];
