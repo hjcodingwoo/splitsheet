@@ -493,6 +493,32 @@
       <button class="btn btn-ghost" onclick="document.getElementById('modal-import-review').style.display='none'">✕</button>
     </div>
     <div style="font-size:12px;color:#888;margin-bottom:12px">Edit any cell, remove rows you don't want, then Save all. Rows auto-filled from a known merchant are muted; rows needing input are highlighted.</div>
+    <!-- BULK APPLY BAR -->
+    <div id="import-bulk-bar" style="display:flex;flex-direction:column;gap:8px;padding:12px;background:var(--cream);border-radius:6px;margin-bottom:10px;border:1.5px solid var(--rule)">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span id="import-bulk-count" style="font-size:12px;color:#888">0 selected</span>
+        <button type="button" onclick="selectNeedsInputRows()" style="font-size:11px;padding:4px 10px;border:1px solid var(--rule);border-radius:4px;background:#fff;cursor:pointer;color:#666">Select needs-input</button>
+        <button id="import-bulk-apply-btn" onclick="applyBulkImportEdit()" class="btn btn-primary" style="font-size:12px;padding:4px 14px;margin-left:auto" disabled>Apply to selected</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">
+        <div>
+          <label style="font-size:11px;color:#888;font-weight:500">Project</label>
+          <select id="import-bulk-project" onchange="onBulkProjectChange()" style="width:100%;padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px;background:#fff"><option value="">— no change —</option></select>
+        </div>
+        <div>
+          <label style="font-size:11px;color:#888;font-weight:500">Payer</label>
+          <select id="import-bulk-payer" style="width:100%;padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px;background:#fff"><option value="">— no change —</option></select>
+        </div>
+        <div>
+          <label style="font-size:11px;color:#888;font-weight:500">Category</label>
+          <select id="import-bulk-category" style="width:100%;padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px;background:#fff"><option value="">— no change —</option></select>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#888;font-weight:500;margin-bottom:4px">Split (leave unchecked for no change):</div>
+        <div id="import-bulk-split" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+      </div>
+    </div>
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px">
       <div style="font-size:12px;color:#aaa" id="import-review-count"></div>
       <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
@@ -2071,6 +2097,7 @@ async function runImportScan() {
     closeModal("modal-import-step1");
     const saveBtn = document.getElementById("import-save-all-btn");
     if (saveBtn) { saveBtn.textContent="Save all"; saveBtn.disabled=false; saveBtn.style.background=""; saveBtn.onclick=saveImportedExpenses; }
+    populateBulkBar();
     renderImportReview();
     document.getElementById("modal-import-review").style.display="block";
   } catch(e) {
@@ -2354,6 +2381,7 @@ async function ensureRowContext(projectId) {
     importRowContextCache[projectId] = { members: res.members||[], categories: res.categories||[] };
   } catch(e) { delete importRowContextCache[projectId]; return; }
   renderImportReview();
+  refreshBulkMemberCategoryLists();
 }
 function getRowMembers(row) {
   if (row.projectId && row.projectId !== state.projectId) {
@@ -2373,23 +2401,107 @@ function getRowCategories(row) {
   }
   return state.categories;
 }
-function onImportRowProjectChange(i, projectId) {
-  const row = importRows[i];
+// Shared by the per-row project dropdown and the bulk-apply bar's "Project" field:
+// switching a row's project resets its split to the target project's full member list
+// (per spec) and drops a payer/category that doesn't belong to the new project.
+function applyProjectDefaultsToRow(row, projectId) {
   row.projectId = projectId;
-  ensureRowContext(projectId);
   const members = getRowMembers(row);
-  row.splitMembers = members.map(m=>m.memberId); // default to target project's full member list, per spec
+  row.splitMembers = members.map(m=>m.memberId);
   if (!members.some(m=>m.memberId===row.payerId)) {
     const fallback = projectId===state.projectId ? {id:importPayerId,name:importPayerName} : {id:members[0]?.memberId||"",name:members[0]?.name||""};
     row.payerId = fallback.id; row.payerName = fallback.name;
   }
   const categories = getRowCategories(row);
   if (!categories.some(c=>c.name===row.category)) row.category = "";
+}
+function onImportRowProjectChange(i, projectId) {
+  const row = importRows[i];
+  ensureRowContext(projectId);
+  applyProjectDefaultsToRow(row, projectId);
   renderImportReview();
 }
 function toggleSelectAllImportRows(checked) {
   importRows.forEach(r=>{ if(!r.deleted) r.selected = checked; });
   renderImportReview();
+}
+function toggleImportRowSelect(i, checked) {
+  importRows[i].selected = checked;
+  updateImportBulkBar();
+}
+function selectNeedsInputRows() {
+  importRows.forEach(r=>{ if(!r.deleted && !r.autoFilled) r.selected = true; });
+  renderImportReview();
+}
+function updateImportBulkBar() {
+  const n = importRows.filter(r=>!r.deleted&&r.selected).length;
+  const countEl = document.getElementById("import-bulk-count");
+  if (countEl) countEl.textContent = n ? `${n} selected` : "0 selected";
+  const btn = document.getElementById("import-bulk-apply-btn");
+  if (btn) btn.disabled = n === 0;
+}
+function populateBulkBar() {
+  const projs = (state.projects||allProjectsCache||[]).filter(p=>!p.archived);
+  const projSel = document.getElementById("import-bulk-project");
+  if (projSel) projSel.innerHTML = `<option value="">— no change —</option>` + projs.map(p=>`<option value="${esc(p.projectId)}">${esc(p.name)}</option>`).join("");
+  refreshBulkMemberCategoryLists();
+}
+function refreshBulkMemberCategoryLists() {
+  const projSel = document.getElementById("import-bulk-project");
+  if (!projSel) return;
+  const bulkProjectId = projSel.value || "";
+  const members = bulkProjectId ? getRowMembers({projectId:bulkProjectId}) : state.members;
+  const categories = bulkProjectId ? getRowCategories({projectId:bulkProjectId}) : state.categories;
+  const payerSel = document.getElementById("import-bulk-payer");
+  if (payerSel) payerSel.innerHTML = `<option value="">— no change —</option>` + members.map(m=>`<option value="${esc(m.memberId)}">${esc(m.name)}</option>`).join("");
+  const catSel = document.getElementById("import-bulk-category");
+  if (catSel) catSel.innerHTML = `<option value="">— no change —</option>` + categories.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("") + `<option value="__new__">+ New category…</option>`;
+  const splitDiv = document.getElementById("import-bulk-split");
+  if (splitDiv) splitDiv.innerHTML = members.map(m=>`<div class="check-item" data-id="${m.memberId}" onclick="this.classList.toggle('checked')" style="font-size:11px;padding:3px 8px;cursor:pointer;border:1px solid var(--rule);border-radius:4px">${esc(m.name)}</div>`).join("");
+}
+function onBulkProjectChange() {
+  ensureRowContext(document.getElementById("import-bulk-project").value);
+  refreshBulkMemberCategoryLists();
+}
+async function applyBulkImportEdit() {
+  const selected = importRows.filter(r=>!r.deleted && r.selected);
+  if (!selected.length) return toast("Select at least one row");
+  const bulkProjectId = document.getElementById("import-bulk-project").value;
+  const bulkPayerId = document.getElementById("import-bulk-payer").value;
+  let bulkCategory = document.getElementById("import-bulk-category").value;
+  const bulkSplitIds = [...document.querySelectorAll("#import-bulk-split .check-item.checked")].map(el=>el.dataset.id);
+  if (!bulkProjectId && !bulkPayerId && !bulkCategory && !bulkSplitIds.length) return toast("Choose at least one field to change");
+  if (bulkCategory === "__new__") {
+    const name = prompt("New category name:");
+    if (!name || !name.trim()) return;
+    const targetForNewCat = bulkProjectId || state.projectId;
+    try {
+      const res = await api("addCategory", {projectId: targetForNewCat, name: name.trim()});
+      bulkCategory = res.name;
+      if (targetForNewCat === state.projectId) {
+        if (!state.categories.find(c=>c.name===bulkCategory)) state.categories.push({categoryId:res.categoryId,name:bulkCategory});
+      } else if (importRowContextCache[targetForNewCat]?.categories && !importRowContextCache[targetForNewCat].categories.find(c=>c.name===bulkCategory)) {
+        importRowContextCache[targetForNewCat].categories.push({categoryId:res.categoryId,name:bulkCategory});
+      }
+    } catch(e) { return toast(e.message); }
+  }
+  if (bulkProjectId) await ensureRowContext(bulkProjectId);
+  const bulkPayerSel = document.getElementById("import-bulk-payer");
+  const bulkPayerName = bulkPayerId ? bulkPayerSel.options[bulkPayerSel.selectedIndex].text : "";
+  for (const row of selected) {
+    if (bulkProjectId) applyProjectDefaultsToRow(row, bulkProjectId); // sets project + safe payer/split/category defaults first
+    if (bulkPayerId) { row.payerId = bulkPayerId; row.payerName = bulkPayerName; }
+    if (bulkCategory) row.category = bulkCategory;
+    if (bulkSplitIds.length) row.splitMembers = [...bulkSplitIds];
+    row.selected = false;
+  }
+  document.getElementById("import-bulk-project").value = "";
+  document.getElementById("import-bulk-payer").value = "";
+  document.getElementById("import-bulk-category").value = "";
+  document.querySelectorAll("#import-bulk-split .check-item.checked").forEach(el=>el.classList.remove("checked"));
+  refreshBulkMemberCategoryLists();
+  renderImportReview();
+  toast(`Updated ${selected.length} row${selected.length!==1?"s":""} ✓`);
 }
 function getSortedRowIndices() {
   const indices = importRows.map((r,i)=>i).filter(i=>!importRows[i].deleted);
@@ -2405,6 +2517,7 @@ function renderImportReview() {
   document.getElementById("import-review-count").textContent = `${active.length} transaction${active.length!==1?"s":""}`;
   const projs = (state.projects||allProjectsCache||[]).filter(p=>!p.archived);
   document.getElementById("import-review-list").innerHTML = getSortedRowIndices().map(i=>renderImportRow(importRows[i], i, projs)).join("");
+  updateImportBulkBar();
 }
 
 function renderImportRow(row, i, projs) {
@@ -2430,7 +2543,7 @@ function renderImportRow(row, i, projs) {
     ? `<span style="font-size:10px;color:#999">· auto</span>`
     : `<span style="font-size:9px;color:#c99a2e;font-weight:600;background:#c99a2e22;padding:2px 5px;border-radius:3px;white-space:nowrap;${row.needsInputReason?'cursor:help':''}"${row.needsInputReason?` title="${esc(row.needsInputReason)}"`:''}>NEEDS INPUT</span>`;
   return `<tr style="background:${rowBg};border-bottom:1px solid var(--rule)">
-    <td style="padding:6px 4px;text-align:center;vertical-align:top"><input type="checkbox" ${row.selected?"checked":""} onchange="importRows[${i}].selected=this.checked"></td>
+    <td style="padding:6px 4px;text-align:center;vertical-align:top"><input type="checkbox" ${row.selected?"checked":""} onchange="toggleImportRowSelect(${i},this.checked)"></td>
     <td style="padding:6px 4px;vertical-align:top;min-width:150px">
       <input type="text" value="${esc(row.itemName||"")}" style="width:100%;font-size:11px;padding:4px" onchange="importRows[${i}].itemName=this.value">
       ${dupNote}
