@@ -487,18 +487,47 @@
 
 <!-- IMPORT STEP 2: REVIEW -->
 <div id="modal-import-review" style="display:none;position:fixed;inset:0;background:var(--paper);z-index:200;overflow-y:auto;padding:20px 16px">
-  <div style="max-width:640px;margin:0 auto">
+  <div style="max-width:1200px;margin:0 auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
       <h2 style="font-family:var(--serif);font-size:1.5rem">Review transactions</h2>
-      <button class="btn btn-ghost" onclick="document.getElementById("modal-import-review").style.display="none"">✕</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('modal-import-review').style.display='none'">✕</button>
     </div>
-    <div style="font-size:12px;color:#888;margin-bottom:16px">Edit, delete, or adjust splits before importing.</div>
-    <div id="import-review-list" style="max-height:55vh;overflow-y:auto;margin-bottom:16px"></div>
-    <div style="display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:1px solid var(--rule)">
+    <div style="font-size:12px;color:#888;margin-bottom:12px">Edit any cell, remove rows you don't want, then Save all. Rows auto-filled from a known merchant are muted; rows needing input are highlighted.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px">
       <div style="font-size:12px;color:#aaa" id="import-review-count"></div>
-      <div class="flex gap-2">
-        <button class="btn btn-secondary" onclick="document.getElementById('modal-import-review').style.display='none'">Cancel</button>
+      <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+        <label style="font-size:11px;color:#888;font-weight:500">Sort</label>
+        <select id="import-sort" onchange="renderImportReview()" style="font-size:12px;padding:4px 8px;width:auto">
+          <option value="none">Import order</option>
+          <option value="merchant">Merchant</option>
+          <option value="project">Project</option>
+          <option value="needsInput">Needs input first</option>
+        </select>
       </div>
+    </div>
+    <div style="overflow-x:auto;border:1px solid var(--rule);border-radius:8px;margin-bottom:16px">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:900px">
+        <thead>
+          <tr style="background:var(--cream);text-align:left">
+            <th style="padding:8px 4px"><input type="checkbox" id="import-select-all" onchange="toggleSelectAllImportRows(this.checked)" title="Select all"></th>
+            <th style="padding:8px 4px">Item</th>
+            <th style="padding:8px 4px">Amount</th>
+            <th style="padding:8px 4px">Currency</th>
+            <th style="padding:8px 4px">Date</th>
+            <th style="padding:8px 4px">Project</th>
+            <th style="padding:8px 4px">Payer</th>
+            <th style="padding:8px 4px">Category</th>
+            <th style="padding:8px 4px">Split</th>
+            <th style="padding:8px 4px">Status</th>
+            <th style="padding:8px 4px"></th>
+          </tr>
+        </thead>
+        <tbody id="import-review-list"></tbody>
+      </table>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:1px solid var(--rule)">
+      <button class="btn btn-secondary" onclick="document.getElementById('modal-import-review').style.display='none'">Cancel</button>
+      <button id="import-save-all-btn" class="btn btn-primary" onclick="saveImportedExpenses()" style="padding:10px 24px">Save all</button>
     </div>
 </div>
 </div>
@@ -1910,6 +1939,7 @@ async function runImportScan() {
     }
     if (!allRows.length) { toast("No transactions found — check the file has transaction rows"); return; }
     importRows = allRows.map((r,i)=>({...r,id:i,deleted:false,splitMembers:state.members.map(m=>m.memberId),expenseDate:(r.expenseDate&&r.expenseDate.length===10)?r.expenseDate:stmtDate}));
+    importRowContextCache = {};
     if (!allProjectsCache.length) { try { const pr=await api("getAllProjects"); allProjectsCache=pr.projects||[]; } catch(e){} }
     try {
       const rulesRes = await api("getRules");
@@ -1918,6 +1948,8 @@ async function runImportScan() {
     } catch(e) { console.log("getRules failed (rule matching skipped):", e.message); }
     importFileQueue = [];
     closeModal("modal-import-step1");
+    const saveBtn = document.getElementById("import-save-all-btn");
+    if (saveBtn) { saveBtn.textContent="Save all"; saveBtn.disabled=false; saveBtn.style.background=""; saveBtn.onclick=saveImportedExpenses; }
     renderImportReview();
     document.getElementById("modal-import-review").style.display="block";
   } catch(e) {
@@ -2191,100 +2223,133 @@ function toggleAdminMember(el) {
   renderAdminTab();
 }
 
-function buildProjectSelector(i, row) {
-  const projs = (state.projects||allProjectsCache||[]).filter(p=>!p.archived);
-  if (projs.length <= 1) return "";
-  const opts = projs.map(p=>{
-    const sel = p.projectId===(row.projectId||state.projectId) ? " selected" : "";
-    return `<option value="${esc(p.projectId)}"${sel}>${esc(p.name)}</option>`;
-  }).join("");
-  return `<div style="margin-bottom:6px"><label style="font-size:11px;color:#888;font-weight:500;text-transform:uppercase;letter-spacing:.06em">Save to project</label><select class="proj-sel" onchange="importRows[${i}].projectId=this.value;loadImportRowContext(this,${i})" style="width:100%;margin-top:3px;padding:5px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px;background:#fff;border:2px solid var(--accent)">${opts}</select></div>`;
+// ── IMPORT REVIEW — bulk grid ─────────────────────────────
+let importRowContextCache = {}; // projectId -> {members, categories}, populated lazily when a row targets another project
+async function ensureRowContext(projectId) {
+  if (!projectId || projectId === state.projectId || importRowContextCache[projectId]) return;
+  importRowContextCache[projectId] = { loading: true };
+  try {
+    const res = await api("getProject", {projectId});
+    importRowContextCache[projectId] = { members: res.members||[], categories: res.categories||[] };
+  } catch(e) { delete importRowContextCache[projectId]; return; }
+  renderImportReview();
+}
+function getRowMembers(row) {
+  if (row.projectId && row.projectId !== state.projectId) {
+    const ctx = importRowContextCache[row.projectId];
+    if (ctx && ctx.members) return ctx.members;
+    ensureRowContext(row.projectId);
+    return state.members;
+  }
+  return state.members;
+}
+function getRowCategories(row) {
+  if (row.projectId && row.projectId !== state.projectId) {
+    const ctx = importRowContextCache[row.projectId];
+    if (ctx && ctx.categories) return ctx.categories;
+    ensureRowContext(row.projectId);
+    return state.categories;
+  }
+  return state.categories;
+}
+function onImportRowProjectChange(i, projectId) {
+  const row = importRows[i];
+  row.projectId = projectId;
+  ensureRowContext(projectId);
+  const members = getRowMembers(row);
+  row.splitMembers = members.map(m=>m.memberId); // default to target project's full member list, per spec
+  if (!members.some(m=>m.memberId===row.payerId)) {
+    const fallback = projectId===state.projectId ? {id:importPayerId,name:importPayerName} : {id:members[0]?.memberId||"",name:members[0]?.name||""};
+    row.payerId = fallback.id; row.payerName = fallback.name;
+  }
+  const categories = getRowCategories(row);
+  if (!categories.some(c=>c.name===row.category)) row.category = "";
+  renderImportReview();
+}
+function toggleSelectAllImportRows(checked) {
+  importRows.forEach(r=>{ if(!r.deleted) r.selected = checked; });
+  renderImportReview();
+}
+function getSortedRowIndices() {
+  const indices = importRows.map((r,i)=>i).filter(i=>!importRows[i].deleted);
+  const mode = document.getElementById("import-sort")?.value || "none";
+  if (mode==="merchant") indices.sort((a,b)=>(importRows[a].itemName||"").localeCompare(importRows[b].itemName||""));
+  else if (mode==="project") indices.sort((a,b)=>(importRows[a].projectId||state.projectId).localeCompare(importRows[b].projectId||state.projectId));
+  else if (mode==="needsInput") indices.sort((a,b)=>(importRows[a].autoFilled?1:0)-(importRows[b].autoFilled?1:0));
+  return indices;
 }
 
 function renderImportReview() {
   const active = importRows.filter(r=>!r.deleted);
   document.getElementById("import-review-count").textContent = `${active.length} transaction${active.length!==1?"s":""}`;
-  const catOpts = `<option value="">— None —</option>`+state.categories.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
-  document.getElementById("import-review-list").innerHTML = importRows.map((row,i)=>{
-    if (row.deleted) return "";
-    const needsFx = row.currency && row.currency !== state.currency;
-    const savedRate = state.fxRates[row.currency] || "";
-    const dup = findDuplicateExpense(row);
-    const dupWarning = dup
-      ? `<div style="background:var(--accent-lt);border-radius:4px;padding:8px;margin-bottom:8px;font-size:12px;color:var(--accent);border-left:3px solid var(--accent)">
-          ⚠️ <strong>Possible duplicate:</strong> "${esc(dup.itemName)}" — ${formatAmt(dup.amount)} ${dup.currency||state.currency} already saved on ${fmtDate(dup.expenseDate||dup.createdAt)}
-          <div style="display:flex;gap:6px;margin-top:6px">
-            <button onclick="saveOneImportRow(${i})" style="flex:1;background:var(--ink);color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:11px;padding:4px 8px;font-family:var(--sans)">Save anyway</button>
-            <button onclick="importRows[${i}].deleted=true;renderImportReview()" style="flex:1;background:none;border:1px solid var(--accent);border-radius:3px;cursor:pointer;font-size:11px;padding:4px 8px;color:var(--accent);font-family:var(--sans)">Don't save (it's a duplicate)</button>
-          </div>
-        </div>`
-      : "";
-    const needsInput = !row.autoFilled && !row.saved;
-    const borderColor = dup ? 'var(--accent)' : (needsInput ? '#c99a2e' : 'var(--rule)');
-    const autoBadge = row.autoFilled ? `<span style="color:#999;font-weight:400;text-transform:none;letter-spacing:0"> · auto</span>` : "";
-    const needsInputBadge = needsInput ? `<span style="background:#c99a2e22;color:#c99a2e;font-size:9px;font-weight:600;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:.04em;text-transform:uppercase">Needs input</span>` : "";
-    return `<div style="border:1.5px solid ${borderColor};border-radius:6px;padding:12px;margin-bottom:8px;background:rgba(255,255,255,.7);${row.autoFilled?'opacity:.88;':''}">
-      ${dupWarning}
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span style="font-size:11px;font-weight:500;letter-spacing:.06em;color:#aaa;text-transform:uppercase">Transaction ${i+1}${autoBadge}${needsInputBadge}</span>
-        <button onclick="importRows[${i}].deleted=true;renderImportReview()" style="background:none;border:none;cursor:pointer;color:#bbb;font-size:16px;padding:0 4px;line-height:1" title="Remove">✕</button>
-      </div>
-      <div style="display:grid;gap:6px">
-        <input type="text" value="${esc(row.itemName||"")}" placeholder="Item name" style="font-size:13px;padding:6px 8px" onchange="importRows[${i}].itemName=this.value">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-          <div><label style="margin-bottom:2px">Expense date</label><input type="date" value="${row.expenseDate||''}" style="font-size:12px;padding:6px 8px" onchange="importRows[${i}].expenseDate=this.value"></div>
-          <div></div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 90px 70px;gap:6px">
-          <input type="number" value="${row.amount||''}" min="0" step="0.01" placeholder="Amount" style="font-size:13px;padding:6px 8px;text-align:right;font-family:var(--mono)" onchange="importRows[${i}].amount=parseFloat(this.value)||0;renderImportReview()">
-          <select style="font-size:12px;padding:6px 4px" onchange="importRows[${i}].currency=this.value;renderImportReview()">
-            ${["HKD","SGD","USD","EUR","GBP","JPY","AUD","CAD","CNY","THB","MYR"].map(c=>`<option${c===row.currency?" selected":""}>${c}</option>`).join("")}
-          </select>
-          <span style="display:flex;align-items:center;font-size:11px;font-family:var(--mono);color:#888;padding:0 4px">${row.currency||state.currency}</span>
-        </div>
-        ${needsFx ? `<div style="background:var(--accent-lt);border-radius:4px;padding:6px 8px;display:flex;align-items:center;gap:8px">
-          <span style="font-size:11px;color:var(--accent);white-space:nowrap;flex-shrink:0">1 ${row.currency} = ? ${state.currency}</span>
-          <input type="number" value="${savedRate}" min="0" step="0.0001" placeholder="FX rate" style="font-size:12px;padding:4px 6px;font-family:var(--mono);flex:1" onchange="importRows[${i}].fxRate=parseFloat(this.value)||null">
-          <span style="font-size:10px;color:#aaa;white-space:nowrap">${savedRate?"(saved)":"(not set)"}</span>
-        </div>` : ""}
-        <div style="display:flex;gap:6px">
-          <select style="font-size:12px;padding:6px 8px;flex:1" onchange="importRows[${i}].category=this.value">${catOpts.replace(`value="${esc(row.category||"")}"`,`value="${esc(row.category||"")}" selected`)}</select>
-          <button type="button" onclick="importAddCategory(${i})" style="background:none;border:1.5px solid var(--rule);border-radius:4px;cursor:pointer;font-size:11px;padding:4px 8px;white-space:nowrap;color:#666;font-family:var(--sans)">+ New</button>
-        </div>
-        <input type="text" value="${esc(row.notes||"")}" placeholder="Notes (optional)" style="font-size:12px;padding:6px 8px" onchange="importRows[${i}].notes=this.value">
-        ${buildProjectSelector(i,row)}
-        ${row.saved ? `<div style="text-align:center;padding:8px;background:#f0faf0;border-radius:4px;font-size:12px;color:#4a9;font-weight:500">✓ Saved</div>` : `<button type="button" class="save-next-btn" onclick="saveOneImportRow(${i})" style="width:100%;padding:8px;background:var(--ink);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-family:var(--sans);font-weight:500">Save &amp; next ↓</button>`}
-        <div>
-          <div style="font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#888;margin-bottom:5px">Split between</div>
-          <div style="display:flex;flex-wrap:wrap;gap:5px">
-            ${state.members.map(m=>{
-              const checked=(row.splitMembers||[]).includes(m.memberId);
-              return `<label style="display:flex;align-items:center;gap:5px;padding:5px 10px;border:1.5px solid ${checked?'var(--ink)':'var(--rule)'};border-radius:4px;cursor:pointer;font-size:12px;background:${checked?'var(--ink)':'transparent'};color:${checked?'#fff':'var(--ink)'}">
-                <input type="checkbox" ${checked?"checked":""} style="display:none" onchange="toggleImportMember(${i},'${m.memberId}',this.checked)">
-                ${esc(m.name)}
-              </label>`;
-            }).join("")}
-          </div>
-        </div>
-      </div>
-    </div>`;
+  const projs = (state.projects||allProjectsCache||[]).filter(p=>!p.archived);
+  document.getElementById("import-review-list").innerHTML = getSortedRowIndices().map(i=>renderImportRow(importRows[i], i, projs)).join("");
+}
+
+function renderImportRow(row, i, projs) {
+  const needsFx = row.currency && row.currency !== state.currency;
+  const savedRate = row.fxRate || state.fxRates[row.currency] || "";
+  const dup = findDuplicateExpense(row);
+  const members = getRowMembers(row);
+  const categories = getRowCategories(row);
+  const rowBg = dup ? 'var(--accent-lt)' : (!row.autoFilled ? '#fbf3e0' : 'transparent');
+  const dupNote = dup ? `<div style="font-size:9px;color:var(--accent);margin-top:2px;cursor:help" title="Matches &quot;${esc(dup.itemName)}&quot; — ${formatAmt(dup.amount)} ${dup.currency||state.currency} on ${fmtDate(dup.expenseDate||dup.createdAt)}">⚠ possible duplicate</div>` : "";
+  const currencyOpts = ["HKD","SGD","USD","EUR","GBP","JPY","AUD","CAD","CNY","THB","MYR"].map(c=>`<option${c===row.currency?" selected":""}>${c}</option>`).join("");
+  const projCell = projs.length > 1
+    ? `<select style="width:100px;font-size:11px;padding:4px" onchange="onImportRowProjectChange(${i},this.value)">${projs.map(p=>`<option value="${esc(p.projectId)}"${p.projectId===(row.projectId||state.projectId)?" selected":""}>${esc(p.name)}</option>`).join("")}</select>`
+    : `<span style="font-size:11px;color:#888">${esc(state.project?.name||"")}</span>`;
+  const payerCell = `<select style="width:90px;font-size:11px;padding:4px" onchange="importRows[${i}].payerId=this.value;importRows[${i}].payerName=this.options[this.selectedIndex].text">${members.map(m=>`<option value="${esc(m.memberId)}"${m.memberId===(row.payerId||importPayerId)?" selected":""}>${esc(m.name)}</option>`).join("")}</select>`;
+  const catOpts = `<option value="">— none —</option>`+categories.map(c=>`<option value="${esc(c.name)}"${c.name===(row.category||"")?" selected":""}>${esc(c.name)}</option>`).join("");
+  const categoryCell = `<div style="display:flex;gap:2px;align-items:center"><select style="width:88px;font-size:11px;padding:4px" onchange="importRows[${i}].category=this.value">${catOpts}</select><button type="button" onclick="importAddCategory(${i})" title="Add category" style="background:none;border:1px solid var(--rule);border-radius:3px;cursor:pointer;font-size:10px;padding:3px 5px;color:#888">+</button></div>`;
+  const splitChips = members.map(m=>{
+    const checked=(row.splitMembers||[]).includes(m.memberId);
+    return `<label style="display:inline-flex;align-items:center;padding:2px 6px;margin:1px;border:1px solid ${checked?'var(--ink)':'var(--rule)'};border-radius:3px;cursor:pointer;font-size:10px;background:${checked?'var(--ink)':'transparent'};color:${checked?'#fff':'var(--ink)'}"><input type="checkbox" ${checked?"checked":""} style="display:none" onchange="toggleImportMember(${i},'${m.memberId}',this.checked)">${esc(m.name)}</label>`;
   }).join("");
+  const statusCell = row.autoFilled
+    ? `<span style="font-size:10px;color:#999">· auto</span>`
+    : `<span style="font-size:9px;color:#c99a2e;font-weight:600;background:#c99a2e22;padding:2px 5px;border-radius:3px;white-space:nowrap">NEEDS INPUT</span>`;
+  return `<tr style="background:${rowBg};border-bottom:1px solid var(--rule)">
+    <td style="padding:6px 4px;text-align:center;vertical-align:top"><input type="checkbox" ${row.selected?"checked":""} onchange="importRows[${i}].selected=this.checked"></td>
+    <td style="padding:6px 4px;vertical-align:top;min-width:150px">
+      <input type="text" value="${esc(row.itemName||"")}" style="width:100%;font-size:11px;padding:4px" onchange="importRows[${i}].itemName=this.value">
+      ${dupNote}
+    </td>
+    <td style="padding:6px 4px;vertical-align:top"><input type="number" value="${row.amount||''}" min="0" step="0.01" style="width:70px;font-size:11px;padding:4px;text-align:right;font-family:var(--mono)" onchange="importRows[${i}].amount=parseFloat(this.value)||0"></td>
+    <td style="padding:6px 4px;vertical-align:top">
+      <select style="width:64px;font-size:11px;padding:4px" onchange="importRows[${i}].currency=this.value;renderImportReview()">${currencyOpts}</select>
+      ${needsFx ? `<input type="number" value="${savedRate}" min="0" step="0.0001" placeholder="FX rate" title="1 ${row.currency} = ? ${state.currency}" style="width:64px;font-size:10px;padding:3px;margin-top:2px;font-family:var(--mono)" onchange="importRows[${i}].fxRate=parseFloat(this.value)||null">` : ""}
+    </td>
+    <td style="padding:6px 4px;vertical-align:top"><input type="date" value="${row.expenseDate||''}" style="width:125px;font-size:11px;padding:4px" onchange="importRows[${i}].expenseDate=this.value"></td>
+    <td style="padding:6px 4px;vertical-align:top">${projCell}</td>
+    <td style="padding:6px 4px;vertical-align:top">${payerCell}</td>
+    <td style="padding:6px 4px;vertical-align:top">${categoryCell}</td>
+    <td style="padding:6px 4px;vertical-align:top;max-width:170px">${splitChips}</td>
+    <td style="padding:6px 4px;vertical-align:top;white-space:nowrap">${statusCell}</td>
+    <td style="padding:6px 4px;text-align:center;vertical-align:top"><button onclick="importRows[${i}].deleted=true;renderImportReview()" style="background:none;border:none;cursor:pointer;color:#bbb;font-size:14px" title="Remove">🗑</button></td>
+  </tr>`;
 }
 
 function toggleImportMember(rowIdx, memberId, checked) {
-  if (!importRows[rowIdx].splitMembers) importRows[rowIdx].splitMembers = state.members.map(m=>m.memberId);
-  if (checked) { if (!importRows[rowIdx].splitMembers.includes(memberId)) importRows[rowIdx].splitMembers.push(memberId); }
-  else { importRows[rowIdx].splitMembers = importRows[rowIdx].splitMembers.filter(id=>id!==memberId); }
+  const row = importRows[rowIdx];
+  if (!row.splitMembers) row.splitMembers = getRowMembers(row).map(m=>m.memberId);
+  if (checked) { if (!row.splitMembers.includes(memberId)) row.splitMembers.push(memberId); }
+  else { row.splitMembers = row.splitMembers.filter(id=>id!==memberId); }
   renderImportReview();
 }
 
 async function importAddCategory(rowIdx) {
+  const row = importRows[rowIdx];
+  const targetProjectId = row.projectId || state.projectId;
   const name = prompt("New category name:");
   if (!name||!name.trim()) return;
   try {
-    const res = await api("addCategory",{projectId:state.projectId,name:name.trim()});
-    if (!state.categories.find(c=>c.name===res.name)) state.categories.push({categoryId:res.categoryId,name:res.name});
-    importRows[rowIdx].category = res.name;
+    const res = await api("addCategory",{projectId:targetProjectId,name:name.trim()});
+    if (targetProjectId === state.projectId) {
+      if (!state.categories.find(c=>c.name===res.name)) state.categories.push({categoryId:res.categoryId,name:res.name});
+    } else if (importRowContextCache[targetProjectId]?.categories && !importRowContextCache[targetProjectId].categories.find(c=>c.name===res.name)) {
+      importRowContextCache[targetProjectId].categories.push({categoryId:res.categoryId,name:res.name});
+    }
+    row.category = res.name;
     renderImportReview();
     toast("Category added: "+res.name);
   } catch(e) { toast(e.message); }
@@ -2313,53 +2378,6 @@ async function saveProjectCurrency() {
   finally { hideLoading(); }
 }
 
-async function loadImportRowContext(selectEl, rowIdx) {
-  const projectId = selectEl.value;
-  const visIdx = importRows.slice(0, rowIdx).filter(r=>!r.deleted).length;
-  const card = document.querySelectorAll("#import-review-list > div")[visIdx];
-  if (!card) return;
-  // Reset to current project context if no project selected
-  if (!projectId || projectId === state.projectId) {
-    const ctx = card.querySelector(".target-project-ctx");
-    if (ctx) ctx.remove();
-    // Restore current project categories
-    const catSel = card.querySelectorAll("select")[1];
-    if (catSel) {
-      catSel.innerHTML = `<option value="">— none —</option>` +
-        state.categories.map(cat=>`<option value="${esc(cat.name)}">${esc(cat.name)}</option>`).join("");
-    }
-    return;
-  }
-  try {
-    const res = await api("getProject", {projectId});
-    // Update category select
-    const catSel = card.querySelectorAll("select")[1];
-    if (catSel && res.categories) {
-      catSel.innerHTML = `<option value="">— none —</option>` +
-        res.categories.map(cat=>`<option value="${esc(cat.name)}">${esc(cat.name)}</option>`).join("");
-    }
-    // Show/update target project context (members)
-    let ctx = card.querySelector(".target-project-ctx");
-    if (!ctx) {
-      ctx = document.createElement("div");
-      ctx.className = "target-project-ctx";
-      ctx.style.cssText = "margin-top:6px;padding:8px;background:#f5f5f0;border-radius:6px;font-size:11px";
-      // Insert before the save button
-      const saveBtn = card.querySelector(".save-next-btn");
-      if (saveBtn) saveBtn.parentNode.insertBefore(ctx, saveBtn);
-      else card.appendChild(ctx);
-    }
-    const members = res.members || [];
-    const catAddHtml = `<div style="margin-top:6px"><label style="font-size:11px;color:#888;font-weight:500">Add/choose category:</label><div style="display:flex;gap:6px;margin-top:3px"><select data-ctx-cat style="flex:1;padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px;background:#fff"><option value="">— none —</option>${(res.categories||[]).map(cat=>`<option value="${esc(cat.name)}">${esc(cat.name)}</option>`).join("")}</select><input data-ctx-cat-new type="text" placeholder="or new…" style="width:80px;padding:4px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px"></div></div>`;
-    ctx.innerHTML = `<div style="color:#888;font-weight:500;margin-bottom:4px">Split between (${esc(res.project?.name||projectId)}):</div>` +
-      `<div style="display:flex;flex-wrap:wrap;gap:4px">` +
-      members.map(m=>`<div class="check-item checked" data-id="${m.memberId}" onclick="toggleBatchChk(this)" style="font-size:11px;padding:2px 8px;cursor:pointer">${esc(m.name)}</div>`).join("") +
-      `</div>` + catAddHtml;
-    // Default splitMembers to all members; will be read from DOM at save time
-    importRows[rowIdx].splitMembers = members.map(m=>m.memberId);
-  } catch(e) { console.error("loadImportRowContext error:", e); toast("Could not load project context"); }
-}
-
 async function onMoveProjectChange(projectId) {
   const details = document.getElementById("move-details");
   if (!projectId) { details.style.display="none"; return; }
@@ -2373,104 +2391,6 @@ async function onMoveProjectChange(projectId) {
   } catch(e) { details.style.display="none"; toast("Could not load target project"); }
 }
 
-async function saveOneImportRow(i) {
-  const row = importRows[i];
-  if (!row || row.saved) return;
-  // Read live DOM values at save time
-  const visIdx = importRows.slice(0,i).filter(r=>!r.deleted).length;
-  const cards = document.querySelectorAll("#import-review-list > div");
-  const card = cards[visIdx];
-  if (card) {
-    const inputs = card.querySelectorAll("input[type=text]");
-    if (inputs[0]?.value) importRows[i].itemName = inputs[0].value;
-    if (inputs[1]?.value !== undefined) importRows[i].notes = inputs[1].value;
-    const dateEl = card.querySelector("input[type=date]");
-    if (dateEl?.value) importRows[i].expenseDate = dateEl.value;
-    const amtEl = card.querySelector("input[type=number]");
-    if (amtEl?.value) importRows[i].amount = parseFloat(amtEl.value)||importRows[i].amount;
-      const selects = card.querySelectorAll("select");
-    // selects[0] = currency, selects[1] = category (per card template order)
-    if (selects[0]?.value) importRows[i].currency = selects[0].value;
-    if (selects[1]?.value) importRows[i].category = selects[1].value;
-    const projSel = card.querySelector("select.proj-sel");
-    if (projSel?.value) importRows[i].projectId = projSel.value;
-    console.log("saveOneImportRow DOM read:", {currency:importRows[i].currency, category:importRows[i].category, projectId:importRows[i].projectId});
-  }
-  // Show saving feedback immediately
-  const btn = card?.querySelector(".save-next-btn");
-  if (btn) { btn.textContent="Saving…"; btn.disabled=true; }
-  const targetProjectId = importRows[i].projectId || state.projectId;
-  // Re-read split from DOM context widget if present
-  const visCard = document.querySelectorAll("#import-review-list > div")[importRows.slice(0,i).filter(r=>!r.deleted).length];
-  const ctxDiv = visCard?.querySelector(".target-project-ctx");
-  if (ctxDiv) {
-    const checkedIds = [...ctxDiv.querySelectorAll(".check-item.checked")].map(el=>el.dataset.id).filter(Boolean);
-    if (checkedIds.length) importRows[i].splitMembers = checkedIds;
-    // Read category from ctx
-    const ctxCatNew = (ctxDiv.querySelector("[data-ctx-cat-new]")?.value||"").trim();
-    const ctxCatSel = ctxDiv.querySelector("[data-ctx-cat]")?.value||"";
-    const ctxCat = ctxCatNew || ctxCatSel;
-    if (ctxCat) {
-      // Add category to target project
-      try { await api("addCategory",{projectId:targetProjectId,name:ctxCat}); } catch(e){}
-      importRows[i].category = ctxCat;
-    }
-  }
-  const splitBetween = (importRows[i].splitMembers?.length) ? importRows[i].splitMembers : state.members.map(m=>m.memberId);
-  if (row.fxRate && row.currency && row.currency !== state.currency) {
-    try { await api("setFxRate",{projectId:targetProjectId,currency:row.currency,rate:row.fxRate}); state.fxRates[row.currency]=row.fxRate; } catch(e){}
-  }
-  try {
-    const logDate = todayISO();
-    const expenseDate = importRows[i].expenseDate || logDate;
-    const payerId = importRows[i].payerId || importPayerId, payerName = importRows[i].payerName || importPayerName;
-    const res = await api("addExpense",{projectId:targetProjectId,itemName:importRows[i].itemName,amount:importRows[i].amount,currency:importRows[i].currency,payerId,payerName,splitBetween,category:importRows[i].category||"",notes:importRows[i].notes||"",customSplits:"",expenseDate,logDate});
-    importRows[i].saved = true;
-    captureRule({itemName:importRows[i].itemName,projectId:targetProjectId,category:importRows[i].category||"",splitBetween,payerId});
-    console.log("Saved expense to project:", targetProjectId, "res:", res);
-    // Always refresh if saving to current project
-    if (targetProjectId === state.projectId) {
-      const expRes = await api("getExpenses",{projectId:state.projectId});
-      state.expenses = expRes.expenses;
-      renderExpenses();
-    }
-    toast(importRows[i].itemName+" saved ✓");
-    renderImportReview();
-    // Scroll to next unsaved row
-    const next = importRows.findIndex((r,j)=>j>i&&!r.deleted&&!r.saved);
-    if (next>=0) {
-      setTimeout(()=>{
-        const allCards = document.querySelectorAll("#import-review-list > div");
-        let nvis=0;
-        for (let k=0;k<importRows.length;k++) {
-          if (importRows[k].deleted) continue;
-          if (k===next) { allCards[nvis]?.scrollIntoView({behavior:"smooth",block:"start"}); break; }
-          nvis++;
-        }
-      },80);
-    } else {
-      // Last row saved — refresh then show Done button instead of auto-closing
-      try { const expRes=await api("getExpenses",{projectId:state.projectId}); state.expenses=expRes.expenses; renderExpenses(); } catch(e){}
-      // Replace Save & next with Done & close
-      if (btn) {
-        btn.textContent = "Done ✓ — tap to close";
-        btn.disabled = false;
-        btn.style.background = "#4a9";
-        btn.onclick = () => {
-          document.getElementById("modal-import-review").style.display="none";
-          toast("All expenses imported ✓");
-        };
-      } else {
-        document.getElementById("modal-import-review").style.display="none";
-        toast("All expenses imported ✓");
-      }
-    }
-  } catch(e) {
-    if (btn) { btn.textContent="Save & next ↓"; btn.disabled=false; }
-    toast("Error: "+e.message);
-  }
-}
-
 async function saveImportedExpenses() {
   const active = importRows.filter(r=>!r.deleted&&!r.saved);
   const alreadySaved = importRows.filter(r=>!r.deleted&&r.saved).length;
@@ -2478,31 +2398,41 @@ async function saveImportedExpenses() {
     if (alreadySaved) { document.getElementById("modal-import-review").style.display="none"; toast(`${alreadySaved} expense${alreadySaved!==1?"s":""} already saved ✓`); return; }
     return toast("No transactions to import");
   }
-  let saved = 0, errors = 0;
+  const btn = document.getElementById("import-save-all-btn");
+  if (btn) btn.disabled = true;
+  let saved = 0, errors = 0, crossProj = 0;
+  showProgress(0, `Saving 0/${active.length}…`);
   for (let _bi=0; _bi<active.length; _bi++) {
     const row = active[_bi];
-    // Re-read from importRows to get any DOM edits user made
-    const liveRow = importRows.find(r=>r.id===row.id) || row;
-    const splitBetween = (liveRow.splitMembers&&liveRow.splitMembers.length) ? liveRow.splitMembers : state.members.map(m=>m.memberId);
-    if (liveRow.fxRate && liveRow.currency && liveRow.currency !== state.currency) {
-      try { await api("setFxRate",{projectId:state.projectId,currency:liveRow.currency,rate:liveRow.fxRate}); state.fxRates[liveRow.currency]=liveRow.fxRate; } catch(e){}
+    const targetProjectId = row.projectId || state.projectId;
+    const splitBetween = (row.splitMembers&&row.splitMembers.length) ? row.splitMembers : state.members.map(m=>m.memberId);
+    if (row.fxRate && row.currency && row.currency !== state.currency) {
+      try { await api("setFxRate",{projectId:targetProjectId,currency:row.currency,rate:row.fxRate}); state.fxRates[row.currency]=row.fxRate; } catch(e){}
     }
     try {
       const logDate = todayISO();
-      const expenseDate = liveRow.expenseDate || logDate;
-      const payerId = liveRow.payerId || importPayerId, payerName = liveRow.payerName || importPayerName;
-      await api("addExpense",{projectId:liveRow.projectId||state.projectId,itemName:liveRow.itemName,amount:liveRow.amount,currency:liveRow.currency,payerId,payerName,splitBetween,category:liveRow.category||"",notes:liveRow.notes||"",customSplits:"",expenseDate,logDate});
-      captureRule({itemName:liveRow.itemName,projectId:liveRow.projectId||state.projectId,category:liveRow.category||"",splitBetween,payerId});
+      const expenseDate = row.expenseDate || logDate;
+      const payerId = row.payerId || importPayerId, payerName = row.payerName || importPayerName;
+      const payload = {projectId:targetProjectId,itemName:row.itemName,amount:row.amount,currency:row.currency,payerId,payerName,splitBetween,category:row.category||"",notes:row.notes||"",customSplits:"",expenseDate,logDate};
+      console.log("saveImportedExpenses addExpense payload:", payload);
+      await api("addExpense", payload);
+      captureRule({itemName:row.itemName,projectId:targetProjectId,category:row.category||"",splitBetween,payerId});
+      row.saved = true;
       saved++;
-      btn.textContent = `Importing ${saved}/${active.length}…`;
+      if (targetProjectId !== state.projectId) crossProj++;
     } catch(e) { errors++; console.error("Import error:", e.message, row.itemName); }
+    showProgress(Math.round((saved+errors)/active.length*100), `Saving ${saved+errors}/${active.length}…`);
   }
-  const expRes = await api("getExpenses",{projectId:state.projectId});
-  state.expenses = expRes.expenses;
-  renderExpenses();
-  document.getElementById("modal-import-review").style.display="none";
-  const crossProj = active.filter(r=>(importRows.find(x=>x.id===r.id)||r).projectId&&(importRows.find(x=>x.id===r.id)||r).projectId!==state.projectId).length;
-  toast(`${saved} saved${crossProj?` (${crossProj} to other projects)`:""} ✓`);
+  hideProgress();
+  try { const expRes = await api("getExpenses",{projectId:state.projectId}); state.expenses = expRes.expenses; renderExpenses(); } catch(e){}
+  renderImportReview();
+  toast(`${saved} saved${crossProj?` (${crossProj} to other projects)`:""}${errors?` · ${errors} failed`:""} ✓`);
+  if (btn) {
+    btn.textContent = "Done ✓ — close";
+    btn.disabled = false;
+    btn.style.background = "#4a9";
+    btn.onclick = () => { document.getElementById("modal-import-review").style.display="none"; };
+  }
 }
 
 // ── CORE UTILS ───────────────────────────────────────────
