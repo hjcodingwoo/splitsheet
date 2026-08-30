@@ -1818,6 +1818,120 @@ function parseWiseCsv(text) {
   return rows.length ? rows : null;
 }
 
+// ── DIRECT-PARSE — recognized-header CSV/XLSX (no AI) ─────
+// Header cells are matched case-insensitively (letters only, so "Split Between"/"split_between" both match);
+// extra columns (e.g. "Source of Screenshot") are simply not in this map and get ignored.
+const DIRECT_HEADER_FIELDS = {itemname:"itemName",amount:"amount",currency:"currency",category:"category",expensedate:"expenseDate",payer:"payer",splitbetween:"splitBetween",project:"project",notes:"notes"};
+function parseCsvRows(text) {
+  return text.trim().split(/\r?\n/).map(line=>{
+    const cols=[]; let cur="",inQ=false;
+    for (const ch of line) {
+      if (ch==='"') inQ=!inQ;
+      else if (ch===","&&!inQ) { cols.push(cur.trim()); cur=""; }
+      else cur+=ch;
+    }
+    cols.push(cur.trim());
+    return cols.map(c=>c.replace(/^"|"$/g,""));
+  });
+}
+// Resolves one raw parsed row's payer/split/project/category by case-insensitive name match.
+// Unmatched payer/split names fall back to safe defaults and flag the row needs-input with a reason;
+// an unmatched or absent project silently defaults to the current project (matches how the app
+// otherwise treats "no project given").
+async function resolveDirectRow(raw, stmtDate) {
+  const row = {
+    itemName: (raw.itemName||"").substring(0,60),
+    amount: raw.amount,
+    currency: (raw.currency||state.currency||"USD").toUpperCase(),
+    notes: raw.notes||"",
+    expenseDate: (raw.expenseDate && /^\d{4}-\d{2}-\d{2}/.test(raw.expenseDate)) ? raw.expenseDate.substring(0,10) : stmtDate,
+  };
+  const reasons = [];
+  let targetProject = null;
+  if (raw.projectName) {
+    targetProject = (allProjectsCache||[]).find(p=>!p.archived && p.name.toLowerCase()===raw.projectName.trim().toLowerCase());
+  }
+  const projectId = targetProject ? targetProject.projectId : state.projectId;
+  const projectName = targetProject ? targetProject.name : (state.project?.name||projectId);
+  const members = targetProject ? (targetProject.members||[]) : state.members;
+  row.projectId = projectId;
+  if (raw.payerName) {
+    const m = members.find(mm=>mm.name.toLowerCase()===raw.payerName.trim().toLowerCase());
+    if (m) { row.payerId = m.memberId; row.payerName = m.name; }
+    else {
+      reasons.push(`payer '${raw.payerName}' not found in project '${projectName}'`);
+      row.payerId = members[0]?.memberId||""; row.payerName = members[0]?.name||"";
+    }
+  } else if (targetProject) {
+    // No payer given but the row targets a different project — the batch's global import payer
+    // (a member of the current project) wouldn't be valid there.
+    row.payerId = members[0]?.memberId||""; row.payerName = members[0]?.name||"";
+  } else {
+    row.payerId = ""; row.payerName = ""; // falls back to the batch's global import payer at save/render time
+  }
+  if (raw.splitNames) {
+    const names = raw.splitNames.split(/[;,]/).map(s=>s.trim()).filter(Boolean);
+    const matched = names.map(n=>members.find(mm=>mm.name.toLowerCase()===n.toLowerCase())).filter(Boolean);
+    const unmatched = names.filter(n=>!members.some(mm=>mm.name.toLowerCase()===n.toLowerCase()));
+    if (unmatched.length) reasons.push(`split '${unmatched.join(", ")}' not found in project '${projectName}'`);
+    row.splitMembers = matched.length ? matched.map(m=>m.memberId) : members.map(m=>m.memberId);
+  } else {
+    row.splitMembers = members.map(m=>m.memberId);
+  }
+  if (raw.category) {
+    await ensureRowContext(projectId);
+    const categories = getRowCategories({projectId});
+    let cat = categories.find(c=>c.name.toLowerCase()===raw.category.trim().toLowerCase());
+    if (!cat) {
+      try {
+        const res = await api("addCategory",{projectId,name:raw.category.trim()});
+        cat = {categoryId:res.categoryId,name:res.name};
+        if (projectId===state.projectId) { if (!state.categories.find(c=>c.name===cat.name)) state.categories.push(cat); }
+        else if (importRowContextCache[projectId]?.categories && !importRowContextCache[projectId].categories.find(c=>c.name===cat.name)) importRowContextCache[projectId].categories.push(cat);
+      } catch(e) { console.log("Auto-create category failed (non-blocking):", e.message); }
+    }
+    row.category = cat ? cat.name : raw.category.trim();
+  } else {
+    row.category = "";
+  }
+  row.needsInputReason = reasons.join("; ");
+  row.autoFilled = !row.needsInputReason;
+  row._resolved = true;
+  return row;
+}
+// Returns null (meaning "not this format") unless the header row has at least itemName+amount recognized.
+async function parseDirectHeaderCsv(text, stmtDate) {
+  const rows = parseCsvRows(text);
+  if (rows.length < 2) return null;
+  const headerMap = {};
+  rows[0].forEach((h,idx)=>{
+    const key = String(h||"").toLowerCase().replace(/[^a-z]/g,"");
+    if (DIRECT_HEADER_FIELDS[key]) headerMap[DIRECT_HEADER_FIELDS[key]] = idx;
+  });
+  if (headerMap.itemName===undefined || headerMap.amount===undefined) return null;
+  if (!allProjectsCache.length) { try { const pr=await api("getAllProjects"); allProjectsCache=pr.projects||[]; } catch(e){} }
+  const results = [];
+  for (let i=1;i<rows.length;i++) {
+    const cols = rows[i];
+    if (!cols.some(c=>c && c.trim())) continue;
+    const itemName = (cols[headerMap.itemName]||"").trim();
+    const amount = parseFloat(String(cols[headerMap.amount]||"").replace(/[^0-9.\-]/g,""));
+    if (!itemName || !amount || amount<=0) continue;
+    const raw = {
+      itemName, amount,
+      currency: headerMap.currency!==undefined ? cols[headerMap.currency] : "",
+      category: headerMap.category!==undefined ? cols[headerMap.category] : "",
+      expenseDate: headerMap.expenseDate!==undefined ? cols[headerMap.expenseDate] : "",
+      payerName: headerMap.payer!==undefined ? cols[headerMap.payer] : "",
+      splitNames: headerMap.splitBetween!==undefined ? cols[headerMap.splitBetween] : "",
+      projectName: headerMap.project!==undefined ? cols[headerMap.project] : "",
+      notes: headerMap.notes!==undefined ? cols[headerMap.notes] : "",
+    };
+    results.push(await resolveDirectRow(raw, stmtDate));
+  }
+  return results.length ? results : null;
+}
+
 async function callAI(contentBlocks) {
   const response = await fetch("/api/scan-receipt", {
     method:"POST", headers:{"Content-Type":"application/json"},
@@ -1845,6 +1959,8 @@ async function scanOneFile(file, idx, total, stmtDate) {
   if (ext === "csv") {
     // Parse CSV directly in browser — no AI, no size limits
     const text = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsText(file);});
+    const directHeader = await parseDirectHeaderCsv(text, stmtDate);
+    if (directHeader) return directHeader;
     const direct = parseWiseCsv(text);
     if (direct) return direct;
     // Fallback to AI for non-Wise CSVs (trimmed to avoid size limit)
@@ -1859,7 +1975,9 @@ async function scanOneFile(file, idx, total, stmtDate) {
     const ab = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsArrayBuffer(file);});
     const wb = XLSX.read(ab, {type:"array"});
     const csvText = wb.SheetNames.map(n=>XLSX.utils.sheet_to_csv(wb.Sheets[n])).join("\n\n");
-    // Try direct parse first
+    // Try our own recognized-header template first, then the Wise-CSV shape, then fall back to AI
+    const directHeader = await parseDirectHeaderCsv(csvText, stmtDate);
+    if (directHeader) return directHeader;
     const direct = parseWiseCsv(csvText);
     if (direct) return direct;
     return await callAI([{type:"text",text:`Bank statement Excel:\n\n${csvText.substring(0,15000)}\n\n${IMPORT_PROMPT_TEXT}`}]);
@@ -1931,6 +2049,9 @@ async function runImportScan() {
   const stmtDate  = document.getElementById("import-stmt-date").value;
   document.getElementById("import-scanning").style.display = "block";
   document.getElementById("import-scan-btn").disabled = true;
+  // Direct-parse rows resolve project/payer/split names against all projects, so this cache
+  // needs to be ready before scanOneFile runs, not just before rendering the review grid.
+  if (!allProjectsCache.length) { try { const pr=await api("getAllProjects"); allProjectsCache=pr.projects||[]; } catch(e){} }
   let allRows = [];
   try {
     for (let i = 0; i < importFileQueue.length; i++) {
@@ -1938,13 +2059,13 @@ async function runImportScan() {
       allRows = allRows.concat(rows);
     }
     if (!allRows.length) { toast("No transactions found — check the file has transaction rows"); return; }
-    importRows = allRows.map((r,i)=>({...r,id:i,deleted:false,splitMembers:state.members.map(m=>m.memberId),expenseDate:(r.expenseDate&&r.expenseDate.length===10)?r.expenseDate:stmtDate}));
+    // Direct-parsed rows (r._resolved) already set splitMembers/expenseDate deliberately — don't clobber them.
+    importRows = allRows.map((r,i)=>({...r,id:i,deleted:false,splitMembers:r.splitMembers||state.members.map(m=>m.memberId),expenseDate:(r.expenseDate&&r.expenseDate.length===10)?r.expenseDate:stmtDate}));
     importRowContextCache = {};
-    if (!allProjectsCache.length) { try { const pr=await api("getAllProjects"); allProjectsCache=pr.projects||[]; } catch(e){} }
     try {
       const rulesRes = await api("getRules");
       const rules = rulesRes.rules || [];
-      importRows.forEach(row => applyRuleToRow(row, rules));
+      importRows.forEach(row => { if (!row._resolved) applyRuleToRow(row, rules); });
     } catch(e) { console.log("getRules failed (rule matching skipped):", e.message); }
     importFileQueue = [];
     closeModal("modal-import-step1");
@@ -2307,7 +2428,7 @@ function renderImportRow(row, i, projs) {
   }).join("");
   const statusCell = row.autoFilled
     ? `<span style="font-size:10px;color:#999">· auto</span>`
-    : `<span style="font-size:9px;color:#c99a2e;font-weight:600;background:#c99a2e22;padding:2px 5px;border-radius:3px;white-space:nowrap">NEEDS INPUT</span>`;
+    : `<span style="font-size:9px;color:#c99a2e;font-weight:600;background:#c99a2e22;padding:2px 5px;border-radius:3px;white-space:nowrap;${row.needsInputReason?'cursor:help':''}"${row.needsInputReason?` title="${esc(row.needsInputReason)}"`:''}>NEEDS INPUT</span>`;
   return `<tr style="background:${rowBg};border-bottom:1px solid var(--rule)">
     <td style="padding:6px 4px;text-align:center;vertical-align:top"><input type="checkbox" ${row.selected?"checked":""} onchange="importRows[${i}].selected=this.checked"></td>
     <td style="padding:6px 4px;vertical-align:top;min-width:150px">
