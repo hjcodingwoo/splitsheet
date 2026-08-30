@@ -614,6 +614,46 @@ function captureRule({itemName, projectId, category, splitBetween, payerId}) {
   } catch(e) { console.log("captureRule failed (non-blocking):", e.message); }
 }
 
+// ── RULES — application on import (suggestion, always overridable) ──
+function findMatchingRule(itemName, rules) {
+  const keyword = extractRuleKeyword(itemName);
+  if (!keyword || !rules || !rules.length) return null;
+  const exact = rules.filter(r => String(r.keyword||"").trim().toLowerCase() === keyword);
+  let candidates = exact;
+  if (!candidates.length) {
+    candidates = rules.filter(r => {
+      const rk = String(r.keyword||"").trim().toLowerCase();
+      return rk && (keyword.startsWith(rk) || rk.startsWith(keyword) || keyword.includes(rk) || rk.includes(keyword));
+    });
+  }
+  if (!candidates.length) return null;
+  return [...candidates].sort((a,b) => {
+    const hc = (Number(b.hitCount)||0) - (Number(a.hitCount)||0);
+    if (hc) return hc;
+    return new Date(b.lastUsed||0) - new Date(a.lastUsed||0);
+  })[0];
+}
+function applyRuleToRow(row, rules) {
+  row.autoFilled = false;
+  row.ruleId = null;
+  const rule = findMatchingRule(row.itemName, rules);
+  if (!rule) return;
+  // Rule's project/members may since have been deleted — treat as no-match rather than crash.
+  const targetProj = (state.projects||allProjectsCache||[]).find(p => p.projectId === rule.projectId && !p.archived);
+  if (!targetProj) return;
+  const projMembers = targetProj.members || [];
+  const payerMember = projMembers.find(m => m.memberId === String(rule.payerId||"").trim());
+  const validSplit = String(rule.splitBetween||"").split(",").map(s=>s.trim()).filter(id => id && projMembers.some(m=>m.memberId===id));
+  if (!payerMember || !validSplit.length) return;
+  row.projectId = rule.projectId;
+  row.category = rule.category || "";
+  row.splitMembers = validSplit;
+  row.payerId = payerMember.memberId;
+  row.payerName = payerMember.name;
+  row.autoFilled = true;
+  row.ruleId = rule.ruleId;
+}
+
 function parseProjectInput(val) { try { const u=new URL(val); const p=u.searchParams.get("p"); if(p) document.getElementById("join-id").value=p; } catch {} }
 function toBase(amount, ccy) { const base=state.currency; ccy=(ccy||base).toUpperCase(); if(ccy===base) return parseFloat(amount)||0; const rate=state.fxRates[ccy]; if(rate===undefined||rate===null) return null; return (parseFloat(amount)||0)*rate; }
 function cleanCat(raw) { const s=String(raw||"").trim(); return (s&&s!=="0")?s:"Uncategorised"; }
@@ -1870,6 +1910,12 @@ async function runImportScan() {
     }
     if (!allRows.length) { toast("No transactions found — check the file has transaction rows"); return; }
     importRows = allRows.map((r,i)=>({...r,id:i,deleted:false,splitMembers:state.members.map(m=>m.memberId),expenseDate:(r.expenseDate&&r.expenseDate.length===10)?r.expenseDate:stmtDate}));
+    if (!allProjectsCache.length) { try { const pr=await api("getAllProjects"); allProjectsCache=pr.projects||[]; } catch(e){} }
+    try {
+      const rulesRes = await api("getRules");
+      const rules = rulesRes.rules || [];
+      importRows.forEach(row => applyRuleToRow(row, rules));
+    } catch(e) { console.log("getRules failed (rule matching skipped):", e.message); }
     importFileQueue = [];
     closeModal("modal-import-step1");
     renderImportReview();
@@ -2173,10 +2219,14 @@ function renderImportReview() {
           </div>
         </div>`
       : "";
-    return `<div style="border:1.5px solid ${dup?'var(--accent)':'var(--rule)'};border-radius:6px;padding:12px;margin-bottom:8px;background:rgba(255,255,255,.7)">
+    const needsInput = !row.autoFilled && !row.saved;
+    const borderColor = dup ? 'var(--accent)' : (needsInput ? '#c99a2e' : 'var(--rule)');
+    const autoBadge = row.autoFilled ? `<span style="color:#999;font-weight:400;text-transform:none;letter-spacing:0"> · auto</span>` : "";
+    const needsInputBadge = needsInput ? `<span style="background:#c99a2e22;color:#c99a2e;font-size:9px;font-weight:600;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:.04em;text-transform:uppercase">Needs input</span>` : "";
+    return `<div style="border:1.5px solid ${borderColor};border-radius:6px;padding:12px;margin-bottom:8px;background:rgba(255,255,255,.7);${row.autoFilled?'opacity:.88;':''}">
       ${dupWarning}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span style="font-size:11px;font-weight:500;letter-spacing:.06em;color:#aaa;text-transform:uppercase">Transaction ${i+1}</span>
+        <span style="font-size:11px;font-weight:500;letter-spacing:.06em;color:#aaa;text-transform:uppercase">Transaction ${i+1}${autoBadge}${needsInputBadge}</span>
         <button onclick="importRows[${i}].deleted=true;renderImportReview()" style="background:none;border:none;cursor:pointer;color:#bbb;font-size:16px;padding:0 4px;line-height:1" title="Remove">✕</button>
       </div>
       <div style="display:grid;gap:6px">
@@ -2373,9 +2423,10 @@ async function saveOneImportRow(i) {
   try {
     const logDate = todayISO();
     const expenseDate = importRows[i].expenseDate || logDate;
-    const res = await api("addExpense",{projectId:targetProjectId,itemName:importRows[i].itemName,amount:importRows[i].amount,currency:importRows[i].currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:importRows[i].category||"",notes:importRows[i].notes||"",customSplits:"",expenseDate,logDate});
+    const payerId = importRows[i].payerId || importPayerId, payerName = importRows[i].payerName || importPayerName;
+    const res = await api("addExpense",{projectId:targetProjectId,itemName:importRows[i].itemName,amount:importRows[i].amount,currency:importRows[i].currency,payerId,payerName,splitBetween,category:importRows[i].category||"",notes:importRows[i].notes||"",customSplits:"",expenseDate,logDate});
     importRows[i].saved = true;
-    captureRule({itemName:importRows[i].itemName,projectId:targetProjectId,category:importRows[i].category||"",splitBetween,payerId:importPayerId});
+    captureRule({itemName:importRows[i].itemName,projectId:targetProjectId,category:importRows[i].category||"",splitBetween,payerId});
     console.log("Saved expense to project:", targetProjectId, "res:", res);
     // Always refresh if saving to current project
     if (targetProjectId === state.projectId) {
@@ -2439,8 +2490,9 @@ async function saveImportedExpenses() {
     try {
       const logDate = todayISO();
       const expenseDate = liveRow.expenseDate || logDate;
-      await api("addExpense",{projectId:liveRow.projectId||state.projectId,itemName:liveRow.itemName,amount:liveRow.amount,currency:liveRow.currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:liveRow.category||"",notes:liveRow.notes||"",customSplits:"",expenseDate,logDate});
-      captureRule({itemName:liveRow.itemName,projectId:liveRow.projectId||state.projectId,category:liveRow.category||"",splitBetween,payerId:importPayerId});
+      const payerId = liveRow.payerId || importPayerId, payerName = liveRow.payerName || importPayerName;
+      await api("addExpense",{projectId:liveRow.projectId||state.projectId,itemName:liveRow.itemName,amount:liveRow.amount,currency:liveRow.currency,payerId,payerName,splitBetween,category:liveRow.category||"",notes:liveRow.notes||"",customSplits:"",expenseDate,logDate});
+      captureRule({itemName:liveRow.itemName,projectId:liveRow.projectId||state.projectId,category:liveRow.category||"",splitBetween,payerId});
       saved++;
       btn.textContent = `Importing ${saved}/${active.length}…`;
     } catch(e) { errors++; console.error("Import error:", e.message, row.itemName); }
