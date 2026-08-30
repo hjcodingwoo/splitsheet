@@ -472,6 +472,11 @@
           <span style="font-size:13px;color:var(--ink);font-weight:500">Add CSV or other files</span>
         </button>
         <div id="import-file-queue" style="display:none;margin-top:8px;flex-wrap:wrap;gap:6px;flex-direction:row"></div>
+        <button type="button" onclick="togglePasteImport()" style="width:100%;text-align:center;background:none;border:none;color:#888;font-size:11px;cursor:pointer;margin-top:8px;text-decoration:underline;padding:4px">or paste data copied from a spreadsheet</button>
+        <div id="import-paste-section" style="display:none;margin-top:8px">
+          <textarea id="import-paste-text" rows="6" placeholder="Paste rows copied from Excel/Google Sheets, including the header row:&#10;itemName  amount  currency  category  expenseDate  payer  splitBetween  project  notes" style="width:100%;font-family:var(--mono);font-size:11px;padding:8px;resize:vertical"></textarea>
+          <button class="btn btn-primary w-full" type="button" onclick="runPasteImport()" style="margin-top:8px;justify-content:center">Parse pasted data</button>
+        </div>
       </div>
       <div id="import-scanning" style="display:none;text-align:center;padding:16px;background:var(--cream);border-radius:6px;font-size:13px;color:#888">
         <div style="display:inline-block;width:14px;height:14px;border:2px solid #ccc;border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:middle"></div>
@@ -1848,12 +1853,12 @@ function parseWiseCsv(text) {
 // Header cells are matched case-insensitively (letters only, so "Split Between"/"split_between" both match);
 // extra columns (e.g. "Source of Screenshot") are simply not in this map and get ignored.
 const DIRECT_HEADER_FIELDS = {itemname:"itemName",amount:"amount",currency:"currency",category:"category",expensedate:"expenseDate",payer:"payer",splitbetween:"splitBetween",project:"project",notes:"notes"};
-function parseCsvRows(text) {
+function parseCsvRows(text, delimiter=",") {
   return text.trim().split(/\r?\n/).map(line=>{
     const cols=[]; let cur="",inQ=false;
     for (const ch of line) {
       if (ch==='"') inQ=!inQ;
-      else if (ch===","&&!inQ) { cols.push(cur.trim()); cur=""; }
+      else if (ch===delimiter&&!inQ) { cols.push(cur.trim()); cur=""; }
       else cur+=ch;
     }
     cols.push(cur.trim());
@@ -1950,8 +1955,10 @@ async function resolveDirectRow(raw, stmtDate, targetProject) {
 }
 // Returns null (meaning "not this format", or a hard failure) unless the header row has at least
 // itemName+amount recognized AND every row resolves without a fetch error.
-async function parseDirectHeaderCsv(text, stmtDate) {
-  const rows = parseCsvRows(text);
+// delimiter defaults to comma (file uploads); paste-import passes "\t" when the pasted text
+// came from a spreadsheet (tab-separated) instead of a true CSV.
+async function parseDirectHeaderCsv(text, stmtDate, delimiter=",") {
+  const rows = parseCsvRows(text, delimiter);
   if (rows.length < 2) return null;
   const headerMap = {};
   rows[0].forEach((h,idx)=>{
@@ -2146,6 +2153,27 @@ Rules:
 
 const IMPORT_PROMPT = IMPORT_PROMPT_IMAGE;
 
+// Shared tail for both the file-upload scan path and the paste-data path: normalizes rows into
+// the importRows model, applies rules to whatever wasn't already deterministically resolved,
+// and hands off to the bulk grid. Returns false (and just toasts) if there was nothing to import.
+async function finishImportRows(allRows, stmtDate) {
+  if (!allRows.length) { toast("No transactions found — check the file has transaction rows"); return false; }
+  // Direct-parsed rows (r._resolved) already set splitMembers/expenseDate deliberately — don't clobber them.
+  importRows = allRows.map((r,i)=>({...r,id:i,deleted:false,splitMembers:r.splitMembers||state.members.map(m=>m.memberId),expenseDate:(r.expenseDate&&r.expenseDate.length===10)?r.expenseDate:stmtDate}));
+  try {
+    const rulesRes = await api("getRules");
+    const rules = rulesRes.rules || [];
+    importRows.forEach(row => { if (!row._resolved) applyRuleToRow(row, rules); });
+  } catch(e) { console.log("getRules failed (rule matching skipped):", e.message); }
+  closeModal("modal-import-step1");
+  const saveBtn = document.getElementById("import-save-all-btn");
+  if (saveBtn) { saveBtn.textContent="Save all"; saveBtn.disabled=false; saveBtn.style.background=""; saveBtn.onclick=saveImportedExpenses; }
+  populateBulkBar();
+  renderImportReview();
+  document.getElementById("modal-import-review").style.display="block";
+  return true;
+}
+
 async function runImportScan() {
   if (!importFileQueue.length) return toast("Add at least one file first");
   const payerSel = document.getElementById("import-payer");
@@ -2166,21 +2194,8 @@ async function runImportScan() {
       const rows = await scanOneFile(importFileQueue[i].file, i+1, importFileQueue.length, stmtDate);
       allRows = allRows.concat(rows);
     }
-    if (!allRows.length) { toast("No transactions found — check the file has transaction rows"); return; }
-    // Direct-parsed rows (r._resolved) already set splitMembers/expenseDate deliberately — don't clobber them.
-    importRows = allRows.map((r,i)=>({...r,id:i,deleted:false,splitMembers:r.splitMembers||state.members.map(m=>m.memberId),expenseDate:(r.expenseDate&&r.expenseDate.length===10)?r.expenseDate:stmtDate}));
-    try {
-      const rulesRes = await api("getRules");
-      const rules = rulesRes.rules || [];
-      importRows.forEach(row => { if (!row._resolved) applyRuleToRow(row, rules); });
-    } catch(e) { console.log("getRules failed (rule matching skipped):", e.message); }
-    importFileQueue = [];
-    closeModal("modal-import-step1");
-    const saveBtn = document.getElementById("import-save-all-btn");
-    if (saveBtn) { saveBtn.textContent="Save all"; saveBtn.disabled=false; saveBtn.style.background=""; saveBtn.onclick=saveImportedExpenses; }
-    populateBulkBar();
-    renderImportReview();
-    document.getElementById("modal-import-review").style.display="block";
+    const ok = await finishImportRows(allRows, stmtDate);
+    if (ok) importFileQueue = [];
   } catch(e) {
     console.error("Import scan error:", e);
     const msg = e.message||"unknown error";
@@ -2194,6 +2209,53 @@ async function runImportScan() {
     scanBtn.disabled = false;
     scanBtn.style.opacity = "1";
     scanBtn.textContent = "Scan & review";
+  }
+}
+
+async function togglePasteImport() {
+  const sec = document.getElementById("import-paste-section");
+  if (!sec) return;
+  sec.style.display = sec.style.display === "none" ? "block" : "none";
+}
+
+async function runPasteImport() {
+  const text = document.getElementById("import-paste-text").value;
+  if (!text || !text.trim()) return toast("Paste some rows first");
+  const payerSel = document.getElementById("import-payer");
+  importPayerId   = payerSel.value;
+  importPayerName = payerSel.options[payerSel.selectedIndex].text;
+  const stmtDate  = document.getElementById("import-stmt-date").value;
+  const delimiter = text.includes("\t") ? "\t" : ",";
+  console.log("Paste-import: starting — payer:", importPayerId, "payerName:", importPayerName, "stmtDate:", stmtDate, "delimiter:", delimiter==="\t"?"tab":"comma");
+  const btn = document.querySelector("#import-paste-section .btn-primary");
+  if (btn) { btn.disabled = true; btn.textContent = "Parsing…"; }
+  document.getElementById("import-scanning").style.display = "block";
+  const msgEl = document.getElementById("import-scanning-msg");
+  if (msgEl) msgEl.textContent = "Parsing pasted data…";
+  try {
+    // Same staleness fix as the file-upload path: always refresh, never trust an old cache.
+    try { const pr = await api("getAllProjects"); allProjectsCache = pr.projects || []; }
+    catch(e) { console.error("Paste-import: getAllProjects refresh failed", e.message); }
+    importRowContextCache = {};
+    const rows = await parseDirectHeaderCsv(text, stmtDate, delimiter);
+    if (!rows) {
+      console.log("Paste-import: parseDirectHeaderCsv returned null — header row not recognized, or a hard failure (see prior logs)");
+      toast("Couldn't parse — make sure the first pasted row is the header: itemName, amount, currency, category, expenseDate, payer, splitBetween, project, notes");
+      return;
+    }
+    console.log("Paste-import: parsed", rows.length, "row(s), handing off to the bulk grid");
+    const ok = await finishImportRows(rows, stmtDate);
+    if (ok) {
+      document.getElementById("import-paste-text").value = "";
+      document.getElementById("import-paste-section").style.display = "none";
+      toast(`${rows.length} row${rows.length!==1?"s":""} parsed ✓`);
+    }
+  } catch(e) {
+    console.error("Paste-import error:", e);
+    toast("Paste import error: "+e.message);
+  } finally {
+    document.getElementById("import-scanning").style.display = "none";
+    if (btn) { btn.disabled = false; btn.textContent = "Parse pasted data"; }
   }
 }
 
