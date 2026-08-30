@@ -599,6 +599,21 @@ function api(action, params = {}, _retry = true) {
   });
 }
 
+// ── RULES — capture on save ────────────────────────────────
+const RULE_STOPWORDS = new Set(["the","ltd","limited","llc","inc","co","corp","com","hkg","hk","pte","pty","group"]);
+function extractRuleKeyword(itemName) {
+  const cleaned = String(itemName||"").toLowerCase().replace(/[^a-z\s]/g," ").replace(/\s+/g," ").trim();
+  const words = cleaned.split(" ").filter(w=>w && !RULE_STOPWORDS.has(w));
+  return words.slice(0,2).join(" ");
+}
+function captureRule({itemName, projectId, category, splitBetween, payerId}) {
+  try {
+    const keyword = extractRuleKeyword(itemName);
+    if (!keyword || !projectId) return;
+    api("upsertRule", { keyword, projectId, category: category||"", splitBetween, payerId }).catch(e=>console.log("upsertRule failed (non-blocking):", e.message));
+  } catch(e) { console.log("captureRule failed (non-blocking):", e.message); }
+}
+
 function parseProjectInput(val) { try { const u=new URL(val); const p=u.searchParams.get("p"); if(p) document.getElementById("join-id").value=p; } catch {} }
 function toBase(amount, ccy) { const base=state.currency; ccy=(ccy||base).toUpperCase(); if(ccy===base) return parseFloat(amount)||0; const rate=state.fxRates[ccy]; if(rate===undefined||rate===null) return null; return (parseFloat(amount)||0)*rate; }
 function cleanCat(raw) { const s=String(raw||"").trim(); return (s&&s!=="0")?s:"Uncategorised"; }
@@ -1036,16 +1051,19 @@ async function saveExpense() {
         if (moveCategory) { try { await api("addCategory",{projectId:moveToProject,name:moveCategory}); } catch(e){} }
         await api("addExpense",{projectId:moveToProject,itemName,amount,currency,payerId,payerName,splitBetween:moveSplit,category:moveCategory,notes,customSplits:customSplits||"",expenseDate:resolvedDate,logDate});
         await api("deleteExpense",{expenseId:editingExpenseId,projectId:state.projectId});
+        captureRule({itemName,projectId:moveToProject,category:moveCategory,splitBetween:moveSplit,payerId});
       } else {
         const logDate=v("exp-logdate")||todayISO();
         console.log("editExpense payload:", {expenseId:editingExpenseId, splitBetween:resolvedSplit});
         await api("editExpense",{expenseId:editingExpenseId,projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween:resolvedSplit,category,notes,customSplits:customSplits||"",expenseDate:resolvedDate,logDate});
+        captureRule({itemName,projectId:state.projectId,category,splitBetween:resolvedSplit,payerId});
       }
       const expRes=await api("getExpenses",{projectId:state.projectId});
       state.expenses=expRes.expenses;
     } else {
       const logDate=todayISO();
       const addRes=await api("addExpense",{projectId:state.projectId,itemName,amount,currency,payerId,payerName,splitBetween,category,notes,customSplits,expenseDate:resolvedDate,logDate});
+      captureRule({itemName,projectId:state.projectId,category,splitBetween,payerId});
       // Push locally — skip re-fetch round-trip
       if (addRes.expense) state.expenses.push(addRes.expense);
       else { const expRes=await api("getExpenses",{projectId:state.projectId}); state.expenses=expRes.expenses; }
@@ -2357,6 +2375,7 @@ async function saveOneImportRow(i) {
     const expenseDate = importRows[i].expenseDate || logDate;
     const res = await api("addExpense",{projectId:targetProjectId,itemName:importRows[i].itemName,amount:importRows[i].amount,currency:importRows[i].currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:importRows[i].category||"",notes:importRows[i].notes||"",customSplits:"",expenseDate,logDate});
     importRows[i].saved = true;
+    captureRule({itemName:importRows[i].itemName,projectId:targetProjectId,category:importRows[i].category||"",splitBetween,payerId:importPayerId});
     console.log("Saved expense to project:", targetProjectId, "res:", res);
     // Always refresh if saving to current project
     if (targetProjectId === state.projectId) {
@@ -2421,6 +2440,7 @@ async function saveImportedExpenses() {
       const logDate = todayISO();
       const expenseDate = liveRow.expenseDate || logDate;
       await api("addExpense",{projectId:liveRow.projectId||state.projectId,itemName:liveRow.itemName,amount:liveRow.amount,currency:liveRow.currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:liveRow.category||"",notes:liveRow.notes||"",customSplits:"",expenseDate,logDate});
+      captureRule({itemName:liveRow.itemName,projectId:liveRow.projectId||state.projectId,category:liveRow.category||"",splitBetween,payerId:importPayerId});
       saved++;
       btn.textContent = `Importing ${saved}/${active.length}…`;
     } catch(e) { errors++; console.error("Import error:", e.message, row.itemName); }
