@@ -1980,11 +1980,14 @@ async function parseDirectHeaderCsv(text, stmtDate) {
   for (const cols of dataRows) {
     const itemName = (cols[headerMap.itemName]||"").trim();
     const amount = parseFloat(String(cols[headerMap.amount]||"").replace(/[^0-9.\-]/g,""));
-    if (!itemName || !amount || amount<=0) {
+    // A negative amount is real data (a refund/credit), not garbage — only reject a blank
+    // item name, an unparseable amount, or exactly zero.
+    if (!itemName || !amount || !isFinite(amount)) {
       rejected++;
       console.log("Direct-parse: rejecting row — blank itemName or invalid amount:", cols);
       continue;
     }
+    if (amount < 0) console.log(`Direct-parse: keeping negative-amount row "${itemName}" (${amount}) — refund/credit`);
     rawRows.push({
       itemName, amount,
       currency: headerMap.currency!==undefined ? cols[headerMap.currency] : "",
@@ -2641,7 +2644,7 @@ function renderImportRow(row, i, projs) {
       <input type="text" value="${esc(row.itemName||"")}" style="width:100%;font-size:11px;padding:4px" onchange="importRows[${i}].itemName=this.value">
       ${dupNote}
     </td>
-    <td style="padding:6px 4px;vertical-align:top"><input type="number" value="${row.amount||''}" min="0" step="0.01" style="width:70px;font-size:11px;padding:4px;text-align:right;font-family:var(--mono)" onchange="importRows[${i}].amount=parseFloat(this.value)||0"></td>
+    <td style="padding:6px 4px;vertical-align:top"><input type="number" value="${row.amount||''}" step="0.01" style="width:70px;font-size:11px;padding:4px;text-align:right;font-family:var(--mono)" onchange="importRows[${i}].amount=parseFloat(this.value)||0" title="Negative amounts (refunds/credits) are allowed"></td>
     <td style="padding:6px 4px;vertical-align:top">
       <select style="width:64px;font-size:11px;padding:4px" onchange="importRows[${i}].currency=this.value;renderImportReview()">${currencyOpts}</select>
       ${needsFx ? `<input type="number" value="${savedRate}" min="0" step="0.0001" placeholder="FX rate" title="1 ${row.currency} = ? ${state.currency}" style="width:64px;font-size:10px;padding:3px;margin-top:2px;font-family:var(--mono)" onchange="importRows[${i}].fxRate=parseFloat(this.value)||null">` : ""}
