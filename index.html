@@ -107,23 +107,30 @@
     </div>
     <div class="card mb-4">
       <h2 style="font-family:var(--serif);font-size:1.25rem;margin-bottom:16px">Join a project</h2>
-      <div class="mb-3"><label>Project ID</label>
-        <div style="position:relative">
-          <input id="join-id" type="text" placeholder="e.g. europe2026" autocomplete="off"
-            oninput="parseProjectInput(this.value);acProject(this.value)"
-            onblur="setTimeout(()=>hideAc('ac-projects'),150)">
-          <div id="ac-projects" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--rule);border-top:none;border-radius:0 0 6px 6px;z-index:50;max-height:180px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>
+      <div id="join-step-id">
+        <div class="mb-3"><label>Project ID</label>
+          <div style="position:relative">
+            <input id="join-id" type="text" placeholder="e.g. europe2026" autocomplete="off"
+              oninput="parseProjectInput(this.value);acProject(this.value)"
+              onblur="setTimeout(()=>hideAc('ac-projects'),150)"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();lookupJoinProject();}">
+            <div id="ac-projects" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--rule);border-top:none;border-radius:0 0 6px 6px;z-index:50;max-height:180px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>
+          </div>
         </div>
+        <button class="btn btn-primary w-full" onclick="lookupJoinProject()">Continue →</button>
       </div>
-      <div class="mb-4"><label>Your name</label>
-        <div style="position:relative">
-          <input id="join-name" type="text" placeholder="How should we call you?" autocomplete="off"
-            oninput="acName(this.value)"
-            onblur="setTimeout(()=>hideAc('ac-names'),150)">
-          <div id="ac-names" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--rule);border-top:none;border-radius:0 0 6px 6px;z-index:50;max-height:180px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>
+      <div id="join-step-members" style="display:none">
+        <div style="font-size:12px;color:#888;margin-bottom:12px">Project: <strong id="join-members-projname"></strong> <button type="button" onclick="backToIdStep()" style="background:none;border:none;color:#888;text-decoration:underline;cursor:pointer;font-size:11px;padding:0;margin-left:6px">change</button></div>
+        <label style="margin-bottom:8px;display:block">Is your name here?</label>
+        <div id="join-members-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+        <button class="btn btn-secondary w-full" type="button" onclick="showJoinNameInput()">My name isn't here</button>
+      </div>
+      <div id="join-step-name" style="display:none">
+        <div class="mb-4"><label>Your name</label>
+          <input id="join-name" type="text" placeholder="How should we call you?" autocomplete="off">
         </div>
+        <button class="btn btn-primary w-full" onclick="joinProject()">Join →</button>
       </div>
-      <button class="btn btn-primary w-full" onclick="joinProject()">Enter project →</button>
     </div>
     <div class="card">
       <h2 style="font-family:var(--serif);font-size:1.25rem;margin-bottom:16px">Start a new project</h2>
@@ -614,7 +621,7 @@ let allProjectsCache = [];
 // ── INIT ─────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   const p = new URLSearchParams(location.search).get("p");
-  if (p) { document.getElementById("join-id").value = p; document.getElementById("join-name").focus(); }
+  if (p) { document.getElementById("join-id").value = p; lookupJoinProject(); }
   if (!localStorage.getItem("sc_guide_seen")) showGuide();
   loadAllProjectsCache();
   if (isAdmin) { const sb=document.getElementById("admin-summary-btn"); if(sb) sb.style.display=""; }
@@ -764,8 +771,60 @@ async function createProject() {
   } catch(e){toast(e.message);}finally{hideLoading();}
 }
 
+// ── JOIN FLOW — look up the project, show existing members before asking for a name ──
+let joinLookupProjectId = null;
+let joinLookupMembers = [];
+async function lookupJoinProject() {
+  const projectId = v("join-id").trim();
+  if (!projectId) return toast("Enter a project ID");
+  showLoading("Looking up project…");
+  try {
+    const res = await api("getProject", {projectId});
+    joinLookupProjectId = projectId;
+    joinLookupMembers = res.members || [];
+    document.getElementById("join-members-projname").textContent = res.project.name;
+    const list = document.getElementById("join-members-list");
+    list.innerHTML = joinLookupMembers.length
+      ? joinLookupMembers.map(m=>`<button type="button" class="btn btn-secondary w-full" onclick="claimJoinMember('${m.memberId}')" style="justify-content:center">${esc(m.name)}</button>`).join("")
+      : `<div style="font-size:12px;color:#aaa;text-align:center;padding:8px">No members yet.</div>`;
+    document.getElementById("join-step-id").style.display = "none";
+    document.getElementById("join-step-members").style.display = "block";
+    document.getElementById("join-step-name").style.display = "none";
+  } catch(e) { toast(e.message); } finally { hideLoading(); }
+}
+function backToIdStep() {
+  document.getElementById("join-step-id").style.display = "block";
+  document.getElementById("join-step-members").style.display = "none";
+  document.getElementById("join-step-name").style.display = "none";
+}
+function showJoinNameInput() {
+  document.getElementById("join-step-members").style.display = "none";
+  document.getElementById("join-step-name").style.display = "block";
+  document.getElementById("join-name").value = "";
+  document.getElementById("join-name").focus();
+}
+function resetJoinFlow() {
+  joinLookupProjectId = null; joinLookupMembers = [];
+  document.getElementById("join-id").value = "";
+  document.getElementById("join-name").value = "";
+  document.getElementById("join-step-id").style.display = "block";
+  document.getElementById("join-step-members").style.display = "none";
+  document.getElementById("join-step-name").style.display = "none";
+}
+// Tapping an existing member claims that identity directly — no addMember call, no duplicate.
+async function claimJoinMember(memberId) {
+  const member = (joinLookupMembers||[]).find(m=>m.memberId===memberId);
+  if (!member) return;
+  const projectId = joinLookupProjectId;
+  showLoading("Joining project…");
+  try {
+    saveLocalMe(projectId, member.memberId, member.name);
+    await loadProject(projectId); updateURL(projectId);
+    resetJoinFlow();
+  } catch(e) { toast(e.message); } finally { hideLoading(); }
+}
 async function joinProject() {
-  const projectId=v("join-id").trim(),myName=v("join-name").trim();
+  const projectId=(joinLookupProjectId||v("join-id").trim()),myName=v("join-name").trim();
   if(!projectId) return toast("Enter a project ID");
   if(!myName) return toast("Enter your name");
   showLoading("Joining project…");
@@ -773,6 +832,7 @@ async function joinProject() {
     const mem=await api("addMember",{projectId,name:myName});
     saveLocalMe(projectId,mem.memberId,myName);
     await loadProject(projectId); updateURL(projectId);
+    resetJoinFlow();
   } catch(e){toast(e.message);}finally{hideLoading();}
 }
 
@@ -1652,7 +1712,13 @@ async function selectDirectoryMember(el){
 }
 function newMemberJoin(projectId,projectName){
   hideDirectory();
+  // Came from the directory's own member list, so we already know their name isn't there —
+  // skip straight to the name-input step instead of showing the member list again.
+  joinLookupProjectId = projectId;
   document.getElementById("join-id").value=projectId;
+  document.getElementById("join-step-id").style.display="none";
+  document.getElementById("join-step-members").style.display="none";
+  document.getElementById("join-step-name").style.display="block";
   document.getElementById("join-name").value="";
   document.getElementById("join-name").focus();
   toast("Enter your name to join "+projectName);
@@ -1671,20 +1737,10 @@ function acProject(val){
   }).join("");
   dd.style.display="block";
 }
-function pickProject(projectId){document.getElementById("join-id").value=projectId;hideAc("ac-projects");const proj=allProjectsCache.find(p=>p.projectId===projectId);if(proj&&proj.members.length)showNameSuggestions(proj.members);}
-function showNameSuggestions(members){const dd=document.getElementById("ac-names");dd.innerHTML=members.map(m=>`<div style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--rule)" onmousedown="pickName('${m.name.replace(/'/g,"\\'")}') " onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background=''">${esc(m.name)}</div>`).join("");dd.style.display="block";document.getElementById("join-name").focus();}
-function acName(val){
-  const dd=document.getElementById("ac-names");
-  const projectId=document.getElementById("join-id").value.trim();
-  const proj=allProjectsCache.find(p=>p.projectId.toLowerCase()===projectId.toLowerCase());
-  if(!proj){dd.style.display="none";return;}
-  const matches=proj.members.filter(m=>m.name.toLowerCase().includes(val.toLowerCase())).slice(0,6);
-  if(!matches.length){dd.style.display="none";return;}
-  const hi=s=>s.replace(new RegExp(`(${val.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`,"gi"),"<strong style='color:var(--accent)'>$1</strong>");
-  dd.innerHTML=matches.map(m=>`<div style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--rule)" onmousedown="pickName('${m.name.replace(/'/g,"\\'")}') " onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background=''">${hi(esc(m.name))}</div>`).join("");
-  dd.style.display="block";
-}
-function pickName(name){document.getElementById("join-name").value=name;hideAc("ac-names");}
+// Picking a project from the autocomplete dropdown goes straight into the member-lookup step
+// (fresh via getProject, not the possibly-stale allProjectsCache) instead of the old inline
+// name-autocomplete — superseded by the explicit "Is your name here?" step below.
+function pickProject(projectId){document.getElementById("join-id").value=projectId;hideAc("ac-projects");lookupJoinProject();}
 function hideAc(id){document.getElementById(id).style.display="none";}
 
 // ── RECEIPT SCAN (single expense) ────────────────────────
