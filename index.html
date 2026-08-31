@@ -143,6 +143,11 @@
           <option>INR</option><option>KRW</option><option>PHP</option>
         </select></div>
       <div class="mb-4"><label>Your name</label><input id="creator-name" type="text" placeholder="You'll be the first member"></div>
+      <div class="mb-4">
+        <label>Other members <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#bbb;font-size:11px">(optional)</span></label>
+        <div id="new-other-members" style="display:flex;flex-direction:column;gap:6px;margin-bottom:6px"></div>
+        <button type="button" class="btn btn-secondary w-full" onclick="addNewMemberRow()" style="justify-content:center;font-size:12px;padding:8px">+ Add member</button>
+      </div>
       <button class="btn btn-primary w-full" onclick="createProject()">Create project →</button>
     </div>
   </div>
@@ -758,16 +763,34 @@ function buildTotals(filterMemberId) {
 }
 
 // ── PROJECT ───────────────────────────────────────────────
+function addNewMemberRow() {
+  const container = document.getElementById("new-other-members");
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;gap:6px;align-items:center";
+  row.innerHTML = `<input type="text" placeholder="Member name" style="flex:1">
+    <button type="button" onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;color:#bbb;font-size:16px;padding:0 4px;flex-shrink:0" title="Remove">✕</button>`;
+  container.appendChild(row);
+  row.querySelector("input").focus();
+}
 async function createProject() {
   const name=v("new-name").trim(),currency=v("new-currency"),myName=v("creator-name").trim();
   if(!name) return toast("Enter a project name");
   if(!myName) return toast("Enter your name");
+  const otherNames=[...document.querySelectorAll("#new-other-members input")].map(el=>el.value.trim()).filter(Boolean);
   showLoading("Creating project…");
   try {
     const res=await api("createProject",{name,currency});
     const mem=await api("addMember",{projectId:res.projectId,name:myName});
     saveLocalMe(res.projectId,mem.memberId,myName);
+    let failed=0;
+    for (let i=0;i<otherNames.length;i++) {
+      if (otherNames.length>2) showLoading(`Adding members… (${i+1}/${otherNames.length})`);
+      try { await api("addMember",{projectId:res.projectId,name:otherNames[i]}); }
+      catch(e) { failed++; console.error("createProject: addMember failed for", otherNames[i], e.message); }
+    }
+    document.getElementById("new-other-members").innerHTML="";
     await loadProject(res.projectId); updateURL(res.projectId); loadAllProjectsCache();
+    if (failed) toast(`Project created — ${failed} member${failed!==1?"s":""} couldn't be added, add ${failed!==1?"them":"it"} from the Members tab`);
   } catch(e){toast(e.message);}finally{hideLoading();}
 }
 
