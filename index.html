@@ -473,6 +473,10 @@
         </button>
         <div id="import-file-queue" style="display:none;margin-top:8px;flex-wrap:wrap;gap:6px;flex-direction:row"></div>
       </div>
+      <div>
+        <label>Or paste rows <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#bbb;font-size:11px">(header row required: Item, Amount, Currency, Date, Project, Payer, Category, Split)</span></label>
+        <textarea id="import-paste-text" rows="4" placeholder="Item&#9;Amount&#9;Currency&#9;Date&#9;Project&#9;Payer&#9;Category&#9;Split" style="width:100%;font-family:var(--mono);font-size:11px;padding:8px;border:1px solid var(--rule);border-radius:4px;resize:vertical" oninput="updateImportScanBtn()"></textarea>
+      </div>
       <div id="import-scanning" style="display:none;text-align:center;padding:16px;background:var(--cream);border-radius:6px;font-size:13px;color:#888">
         <div style="display:inline-block;width:14px;height:14px;border:2px solid #ccc;border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:middle"></div>
         <span id="import-scanning-msg">Scanning with AI…</span>
@@ -1658,6 +1662,7 @@ function openImportStatement() {
   if (state.me) document.getElementById("import-payer").value = state.me.memberId;
   document.getElementById("import-stmt-date").value = todayISO();
   document.getElementById("import-upload").value = "";
+  document.getElementById("import-paste-text").value = "";
   document.getElementById("import-scanning").style.display = "none";
   importFileQueue = [];
   renderImportQueue();
@@ -1674,17 +1679,23 @@ function addImportFiles(input) {
   });
 }
 
+function updateImportScanBtn() {
+  const btn = document.getElementById("import-scan-btn");
+  const hasPaste = (document.getElementById("import-paste-text")?.value||"").trim().length > 0;
+  const enabled = importFileQueue.length > 0 || hasPaste;
+  btn.disabled = !enabled; btn.style.opacity = enabled ? "1" : ".45";
+}
+
 function renderImportQueue() {
   const div = document.getElementById("import-file-queue");
-  const btn = document.getElementById("import-scan-btn");
-  if (!importFileQueue.length) { div.style.display="none"; btn.disabled=true; btn.style.opacity=".45"; return; }
+  if (!importFileQueue.length) { div.style.display="none"; updateImportScanBtn(); return; }
   div.style.display = "flex";
   div.innerHTML = importFileQueue.map((f,i) => `
     <div style="position:relative;width:56px;height:56px;border-radius:4px;overflow:hidden;border:1.5px solid var(--rule)">
       <img src="${f.dataUrl}" style="width:100%;height:100%;object-fit:cover">
       <button onclick="importFileQueue.splice(${i},1);renderImportQueue()" style="position:absolute;top:1px;right:1px;background:rgba(0,0,0,.55);border:none;border-radius:50%;width:16px;height:16px;color:#fff;font-size:9px;cursor:pointer;padding:0;line-height:1">✕</button>
     </div>`).join("");
-  btn.disabled = false; btn.style.opacity = "1";
+  updateImportScanBtn();
 }
 
 // Parse Wise CSV directly — no AI needed, columns are structured
@@ -1731,6 +1742,76 @@ function parseWiseCsv(text) {
   return rows.length ? rows : null;
 }
 
+// Generic column-mapped importer — pasted text or a custom CSV with our own headers
+// (Item, Amount, Currency, Date, Project, Payer, Category, Split[, FX Rate]), tab- or comma-separated.
+const IMPORT_HEADER_ALIASES = {
+  itemName: ["item","description","name","itemname"],
+  amount: ["amount","amt"],
+  currency: ["currency","ccy"],
+  expenseDate: ["date","expensedate"],
+  rawProject: ["project","projectname"],
+  rawPayer: ["payer","paidby"],
+  category: ["category","cat"],
+  rawSplit: ["split","splitbetween"],
+  fxRate: ["fxrate","rate"]
+};
+
+function normalizeImportDate(s) {
+  if (!s) return "";
+  s = s.trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0,10);
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? "" : d.toISOString().substring(0,10);
+}
+
+function splitDelimitedLine(line, delim) {
+  if (delim === "\t") return line.split("\t").map(c=>c.trim());
+  const cols = []; let cur = "", inQ = false;
+  for (const ch of line) {
+    if (ch === '"') inQ = !inQ;
+    else if (ch === "," && !inQ) { cols.push(cur.trim()); cur = ""; }
+    else cur += ch;
+  }
+  cols.push(cur.trim());
+  return cols.map(c => c.replace(/^"|"$/g,""));
+}
+
+function parseGenericImport(text) {
+  const lines = text.replace(/\r\n?/g,"\n").split("\n").map(l=>l.trim()).filter(l=>l.length);
+  if (lines.length < 2) return null;
+  const delim = lines[0].includes("\t") ? "\t" : ",";
+  const headers = splitDelimitedLine(lines[0], delim).map(h=>h.toLowerCase().replace(/[^a-z]/g,""));
+  const col = {};
+  for (const field in IMPORT_HEADER_ALIASES) {
+    col[field] = -1;
+    for (const alias of IMPORT_HEADER_ALIASES[field]) {
+      const idx = headers.indexOf(alias);
+      if (idx >= 0) { col[field] = idx; break; }
+    }
+  }
+  if (col.itemName < 0 || col.amount < 0) return null; // not a recognizable generic import
+
+  const rows = [];
+  for (let i=1;i<lines.length;i++) {
+    const cols = splitDelimitedLine(lines[i], delim);
+    const itemName = cols[col.itemName] || "";
+    const amount = parseFloat(cols[col.amount] || "0");
+    if (!itemName || !amount) continue;
+    rows.push({
+      itemName,
+      amount,
+      currency: col.currency >= 0 ? (cols[col.currency]||"").toUpperCase().trim() : "",
+      expenseDate: col.expenseDate >= 0 ? normalizeImportDate(cols[col.expenseDate]) : "",
+      category: col.category >= 0 ? (cols[col.category]||"").trim() : "",
+      rawProject: col.rawProject >= 0 ? (cols[col.rawProject]||"").trim() : "",
+      rawPayer: col.rawPayer >= 0 ? (cols[col.rawPayer]||"").trim() : "",
+      rawSplit: col.rawSplit >= 0 ? (cols[col.rawSplit]||"").trim() : "",
+      fxRate: col.fxRate >= 0 ? (parseFloat(cols[col.fxRate])||null) : null
+    });
+  }
+  return rows.length ? rows : null;
+}
+
 async function callAI(contentBlocks) {
   const response = await fetch("/api/scan-receipt", {
     method:"POST", headers:{"Content-Type":"application/json"},
@@ -1760,6 +1841,8 @@ async function scanOneFile(file, idx, total, stmtDate) {
     const text = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsText(file);});
     const direct = parseWiseCsv(text);
     if (direct) return direct;
+    const generic = parseGenericImport(text);
+    if (generic) return generic;
     // Fallback to AI for non-Wise CSVs (trimmed to avoid size limit)
     return await callAI([{type:"text",text:`Bank statement CSV:\n\n${text.substring(0,15000)}\n\n${IMPORT_PROMPT_TEXT}`}]);
 
@@ -1837,7 +1920,8 @@ Rules:
 const IMPORT_PROMPT = IMPORT_PROMPT_IMAGE;
 
 async function runImportScan() {
-  if (!importFileQueue.length) return toast("Add at least one file first");
+  const pasteText = (document.getElementById("import-paste-text")?.value||"").trim();
+  if (!importFileQueue.length && !pasteText) return toast("Add a file or paste rows first");
   const payerSel = document.getElementById("import-payer");
   importPayerId   = payerSel.value;
   importPayerName = payerSel.options[payerSel.selectedIndex].text;
@@ -1846,12 +1930,19 @@ async function runImportScan() {
   document.getElementById("import-scan-btn").disabled = true;
   let allRows = [];
   try {
-    for (let i = 0; i < importFileQueue.length; i++) {
-      const rows = await scanOneFile(importFileQueue[i].file, i+1, importFileQueue.length, stmtDate);
-      allRows = allRows.concat(rows);
+    if (pasteText) {
+      const parsed = parseGenericImport(pasteText);
+      if (!parsed) throw new Error("Couldn't read those columns — need at least a header row with Item and Amount");
+      allRows = parsed;
+    } else {
+      for (let i = 0; i < importFileQueue.length; i++) {
+        const rows = await scanOneFile(importFileQueue[i].file, i+1, importFileQueue.length, stmtDate);
+        allRows = allRows.concat(rows);
+      }
     }
     if (!allRows.length) { toast("No transactions found — check the file has transaction rows"); return; }
     importRows = allRows.map((r,i)=>({...r,id:i,deleted:false,splitMembers:state.members.map(m=>m.memberId),expenseDate:(r.expenseDate&&r.expenseDate.length===10)?r.expenseDate:stmtDate}));
+    await resolveImportRowsContext(importRows);
     importFileQueue = [];
     closeModal("modal-import-step1");
     renderImportReview();
@@ -2137,14 +2228,125 @@ function buildProjectSelector(i, row) {
   return `<div style="margin-bottom:6px"><label style="font-size:11px;color:#888;font-weight:500;text-transform:uppercase;letter-spacing:.06em">Save to project</label><select class="proj-sel" onchange="importRows[${i}].projectId=this.value;loadImportRowContext(this,${i})" style="width:100%;margin-top:3px;padding:5px 8px;font-size:12px;border:1px solid var(--rule);border-radius:4px;background:#fff;border:2px solid var(--accent)">${opts}</select></div>`;
 }
 
+// Resolves per-row Project/Split/Payer/Currency from parsed import data against real
+// project/member/FX-rate data. Runs once over the whole batch (not per row) so rows that
+// target different projects, and rows sharing an unmatched currency, are handled together.
+async function resolveImportRowsContext(rows) {
+  if (!allProjectsCache.length) { try { await loadAllProjectsCache(); } catch(e){} }
+  const projectsByName = {};
+  allProjectsCache.forEach(p => { projectsByName[p.name.trim().toLowerCase()] = p; });
+  const projectFxCache = { [state.projectId]: { defaultCurrency: state.currency, fxRates: state.fxRates } };
+
+  for (const row of rows) {
+    // ---- Project (Bug 1) ----
+    let targetProject = null;
+    if (row.rawProject) {
+      targetProject = projectsByName[row.rawProject.trim().toLowerCase()];
+      if (targetProject) row.projectId = targetProject.projectId;
+      else row.projectUnresolved = true; // present but unmatched — flag, don't misfile
+    }
+    if (!row.projectId) row.projectId = state.projectId;
+    if (!targetProject) targetProject = allProjectsCache.find(p=>p.projectId===row.projectId)
+      || { projectId: state.projectId, name: state.project?.name||"", defaultCurrency: state.currency, members: state.members };
+
+    // ---- Payer (optional, same fallback pattern as Project) ----
+    if (row.rawPayer) {
+      const members = targetProject.members || state.members;
+      const m = members.find(mem => mem.name.trim().toLowerCase() === row.rawPayer.trim().toLowerCase());
+      if (m) { row.payerId = m.memberId; row.payerName = m.name; }
+      else row.payerUnresolved = true;
+    }
+
+    // ---- Split (Bug 2) ----
+    if (row.rawSplit) {
+      const members = targetProject.members || state.members;
+      const names = row.rawSplit.split(",").map(s=>s.trim()).filter(Boolean);
+      const resolvedIds = [], unresolvedNames = [];
+      names.forEach(n => {
+        const m = members.find(mem => mem.name.trim().toLowerCase() === n.toLowerCase());
+        if (m) resolvedIds.push(m.memberId); else unresolvedNames.push(n);
+      });
+      if (unresolvedNames.length) row.splitUnresolved = unresolvedNames;
+      else if (resolvedIds.length) row.splitMembers = resolvedIds;
+    }
+
+    // ---- Currency (Bug 3) ----
+    if (row.currency) {
+      row.currency = row.currency.toUpperCase();
+      const defaultCcy = targetProject.defaultCurrency || state.currency;
+      if (row.currency !== defaultCcy) {
+        let rates = projectFxCache[targetProject.projectId];
+        if (!rates) {
+          try {
+            const res = await api("getProject", {projectId: targetProject.projectId});
+            rates = { defaultCurrency: res.project?.defaultCurrency||defaultCcy, fxRates: res.fxRates||{} };
+          } catch(e) { rates = { defaultCurrency: defaultCcy, fxRates: {} }; }
+          projectFxCache[targetProject.projectId] = rates;
+        }
+        if (!row.fxRate) {
+          const knownRate = rates.fxRates[row.currency];
+          if (knownRate) row.fxRate = knownRate;
+          else row.currencyUnresolved = true; // no rate on file and none supplied — ask once per currency, not per row
+        }
+      }
+    }
+  }
+}
+
+// Distinct (project, currency) pairs still missing a rate — used to prompt once per currency, not per row.
+function getUnresolvedImportFxGroups() {
+  const map = {};
+  importRows.forEach(r => {
+    if (r.deleted || !r.currencyUnresolved || !r.currency) return;
+    const key = r.projectId+"|"+r.currency;
+    if (!map[key]) map[key] = { projectId: r.projectId, currency: r.currency, count: 0 };
+    map[key].count++;
+  });
+  return Object.values(map);
+}
+
+async function applyImportFxGroup(projectId, currency) {
+  const input = document.getElementById(`fxgroup-${projectId}-${currency}`);
+  const rate = parseFloat(input?.value);
+  if (!rate) return toast("Enter a valid rate");
+  importRows.forEach(r => {
+    if (!r.deleted && r.projectId===projectId && r.currency===currency && r.currencyUnresolved) {
+      r.fxRate = rate;
+      r.currencyUnresolved = false;
+    }
+  });
+  try {
+    await api("setFxRate", {projectId, currency, rate});
+    if (projectId === state.projectId) state.fxRates[currency] = rate;
+  } catch(e) {}
+  toast(`Saved: 1 ${currency} = ${rate}`);
+  renderImportReview();
+}
+
 function renderImportReview() {
   const active = importRows.filter(r=>!r.deleted);
   document.getElementById("import-review-count").textContent = `${active.length} transaction${active.length!==1?"s":""}`;
   const catOpts = `<option value="">— None —</option>`+state.categories.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
-  document.getElementById("import-review-list").innerHTML = importRows.map((row,i)=>{
+  const fxGroups = getUnresolvedImportFxGroups();
+  const fxPanelHtml = fxGroups.length ? `<div style="background:var(--accent-lt);border:1px solid var(--accent);border-radius:6px;padding:10px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:6px">Missing exchange rates</div>
+    ${fxGroups.map(g=>{
+      const proj = allProjectsCache.find(p=>p.projectId===g.projectId);
+      const ccyTo = proj?.defaultCurrency || state.currency;
+      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px">
+        <span style="flex-shrink:0">1 ${esc(g.currency)} =</span>
+        <input type="number" step="0.0001" min="0" placeholder="rate" style="width:90px;padding:4px 6px;font-size:12px" id="fxgroup-${esc(g.projectId)}-${esc(g.currency)}">
+        <span style="flex-shrink:0">${esc(ccyTo)} (${g.count} row${g.count!==1?"s":""})</span>
+        <button type="button" onclick="applyImportFxGroup('${esc(g.projectId)}','${esc(g.currency)}')" style="padding:4px 8px;font-size:11px;border:none;border-radius:3px;background:var(--ink);color:#fff;cursor:pointer">Apply &amp; save</button>
+      </div>`;
+    }).join("")}
+  </div>` : "";
+  document.getElementById("import-review-list").innerHTML = fxPanelHtml + importRows.map((row,i)=>{
     if (row.deleted) return "";
-    const needsFx = row.currency && row.currency !== state.currency;
-    const savedRate = state.fxRates[row.currency] || "";
+    const rowProject = allProjectsCache.find(p=>p.projectId===row.projectId);
+    const rowDefaultCcy = rowProject?.defaultCurrency || state.currency;
+    const needsFx = row.currency && row.currency !== rowDefaultCcy;
+    const savedRate = row.fxRate || (row.projectId===state.projectId ? state.fxRates[row.currency] : "") || "";
     const dup = findDuplicateExpense(row);
     const dupWarning = dup
       ? `<div style="background:var(--accent-lt);border-radius:4px;padding:8px;margin-bottom:8px;font-size:12px;color:var(--accent);border-left:3px solid var(--accent)">
@@ -2155,8 +2357,15 @@ function renderImportReview() {
           </div>
         </div>`
       : "";
+    const flagsHtml = [
+      row.projectUnresolved ? `<div style="font-size:11px;color:var(--accent);margin-bottom:6px">⚠ Project "${esc(row.rawProject)}" not found — left on ${esc(state.project?.name||"current project")}</div>` : "",
+      row.payerUnresolved ? `<div style="font-size:11px;color:var(--accent);margin-bottom:6px">⚠ Payer "${esc(row.rawPayer)}" not found — using ${esc(importPayerName)}</div>` : "",
+      (row.splitUnresolved && row.splitUnresolved.length) ? `<div style="font-size:11px;color:var(--accent);margin-bottom:6px">⚠ Split name${row.splitUnresolved.length>1?"s":""} not matched: ${esc(row.splitUnresolved.join(", "))}</div>` : "",
+      row.currencyUnresolved ? `<div style="font-size:11px;color:var(--accent);margin-bottom:6px">⚠ No FX rate for ${esc(row.currency)} yet — set it above</div>` : ""
+    ].join("");
     return `<div style="border:1.5px solid ${dup?'var(--accent)':'var(--rule)'};border-radius:6px;padding:12px;margin-bottom:8px;background:rgba(255,255,255,.7)">
       ${dupWarning}
+      ${flagsHtml}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <span style="font-size:11px;font-weight:500;letter-spacing:.06em;color:#aaa;text-transform:uppercase">Transaction ${i+1}</span>
         <button onclick="importRows[${i}].deleted=true;renderImportReview()" style="background:none;border:none;cursor:pointer;color:#bbb;font-size:16px;padding:0 4px;line-height:1" title="Remove">✕</button>
@@ -2348,14 +2557,16 @@ async function saveOneImportRow(i) {
       importRows[i].category = ctxCat;
     }
   }
-  const splitBetween = (importRows[i].splitMembers?.length) ? importRows[i].splitMembers : state.members.map(m=>m.memberId);
-  if (row.fxRate && row.currency && row.currency !== state.currency) {
-    try { await api("setFxRate",{projectId:targetProjectId,currency:row.currency,rate:row.fxRate}); state.fxRates[row.currency]=row.fxRate; } catch(e){}
+  const targetProjectMembers = (allProjectsCache.find(p=>p.projectId===targetProjectId)?.members) || state.members;
+  const splitBetween = (importRows[i].splitMembers?.length) ? importRows[i].splitMembers : targetProjectMembers.map(m=>m.memberId);
+  const targetDefaultCcy = allProjectsCache.find(p=>p.projectId===targetProjectId)?.defaultCurrency || state.currency;
+  if (row.fxRate && row.currency && row.currency !== targetDefaultCcy) {
+    try { await api("setFxRate",{projectId:targetProjectId,currency:row.currency,rate:row.fxRate}); if (targetProjectId===state.projectId) state.fxRates[row.currency]=row.fxRate; } catch(e){}
   }
   try {
     const logDate = todayISO();
     const expenseDate = importRows[i].expenseDate || logDate;
-    const res = await api("addExpense",{projectId:targetProjectId,itemName:importRows[i].itemName,amount:importRows[i].amount,currency:importRows[i].currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:importRows[i].category||"",notes:importRows[i].notes||"",customSplits:"",expenseDate,logDate});
+    const res = await api("addExpense",{projectId:targetProjectId,itemName:importRows[i].itemName,amount:importRows[i].amount,currency:importRows[i].currency,payerId:importRows[i].payerId||importPayerId,payerName:importRows[i].payerName||importPayerName,splitBetween,category:importRows[i].category||"",notes:importRows[i].notes||"",customSplits:"",expenseDate,logDate});
     importRows[i].saved = true;
     console.log("Saved expense to project:", targetProjectId, "res:", res);
     // Always refresh if saving to current project
@@ -2413,14 +2624,17 @@ async function saveImportedExpenses() {
     const row = active[_bi];
     // Re-read from importRows to get any DOM edits user made
     const liveRow = importRows.find(r=>r.id===row.id) || row;
-    const splitBetween = (liveRow.splitMembers&&liveRow.splitMembers.length) ? liveRow.splitMembers : state.members.map(m=>m.memberId);
-    if (liveRow.fxRate && liveRow.currency && liveRow.currency !== state.currency) {
-      try { await api("setFxRate",{projectId:state.projectId,currency:liveRow.currency,rate:liveRow.fxRate}); state.fxRates[liveRow.currency]=liveRow.fxRate; } catch(e){}
+    const rowTargetProjectId = liveRow.projectId || state.projectId;
+    const rowTargetProject = allProjectsCache.find(p=>p.projectId===rowTargetProjectId);
+    const splitBetween = (liveRow.splitMembers&&liveRow.splitMembers.length) ? liveRow.splitMembers : (rowTargetProject?.members||state.members).map(m=>m.memberId);
+    const rowTargetCcy = rowTargetProject?.defaultCurrency || state.currency;
+    if (liveRow.fxRate && liveRow.currency && liveRow.currency !== rowTargetCcy) {
+      try { await api("setFxRate",{projectId:rowTargetProjectId,currency:liveRow.currency,rate:liveRow.fxRate}); if (rowTargetProjectId===state.projectId) state.fxRates[liveRow.currency]=liveRow.fxRate; } catch(e){}
     }
     try {
       const logDate = todayISO();
       const expenseDate = liveRow.expenseDate || logDate;
-      await api("addExpense",{projectId:liveRow.projectId||state.projectId,itemName:liveRow.itemName,amount:liveRow.amount,currency:liveRow.currency,payerId:importPayerId,payerName:importPayerName,splitBetween,category:liveRow.category||"",notes:liveRow.notes||"",customSplits:"",expenseDate,logDate});
+      await api("addExpense",{projectId:rowTargetProjectId,itemName:liveRow.itemName,amount:liveRow.amount,currency:liveRow.currency,payerId:liveRow.payerId||importPayerId,payerName:liveRow.payerName||importPayerName,splitBetween,category:liveRow.category||"",notes:liveRow.notes||"",customSplits:"",expenseDate,logDate});
       saved++;
       btn.textContent = `Importing ${saved}/${active.length}…`;
     } catch(e) { errors++; console.error("Import error:", e.message, row.itemName); }
