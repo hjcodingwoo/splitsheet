@@ -1931,7 +1931,20 @@ function parseWiseCsv(text) {
 // ── DIRECT-PARSE — recognized-header CSV/XLSX (no AI) ─────
 // Header cells are matched case-insensitively (letters only, so "Split Between"/"split_between" both match);
 // extra columns (e.g. "Source of Screenshot") are simply not in this map and get ignored.
-const DIRECT_HEADER_FIELDS = {itemname:"itemName",amount:"amount",currency:"currency",category:"category",expensedate:"expenseDate",payer:"payer",splitbetween:"splitBetween",project:"project",notes:"notes"};
+// payerId/projectId are separate fields from payer/project (name-style) — a raw sheet export
+// (our own addExpense schema) uses the *Id columns with actual member/project IDs, not names,
+// and IDs must never be matched against a .name string (see resolveDirectRow).
+const DIRECT_HEADER_FIELDS = {
+  itemname:"itemName", item:"itemName", description:"itemName",
+  amount:"amount", amt:"amount",
+  currency:"currency", ccy:"currency",
+  category:"category", cat:"category",
+  expensedate:"expenseDate", date:"expenseDate",
+  payer:"payer", payername:"payer", paidby:"payer", payerid:"payerId",
+  splitbetween:"splitBetween", split:"splitBetween",
+  project:"project", projectname:"project", projectid:"projectId",
+  notes:"notes", note:"notes"
+};
 function parseCsvRows(text, delimiter=",") {
   return text.trim().split(/\r?\n/).map(line=>{
     const cols=[]; let cur="",inQ=false;
@@ -1962,11 +1975,12 @@ async function resolveDirectRow(raw, stmtDate, targetProject) {
     expenseDate: (raw.expenseDate && /^\d{4}-\d{2}-\d{2}/.test(raw.expenseDate)) ? raw.expenseDate.substring(0,10) : stmtDate,
   };
   const reasons = [];
+  const projectRefGiven = raw.projectIdRaw || raw.projectName;
   let projectId, projectName;
-  if (raw.projectName && !targetProject) {
+  if (projectRefGiven && !targetProject) {
     projectId = state.projectId;
     projectName = state.project?.name || projectId;
-    const reason = `project '${raw.projectName}' not found — pick one`;
+    const reason = `project '${projectRefGiven}' not found — pick one`;
     reasons.push(reason);
     console.log(`Direct-parse: row "${row.itemName}" needs input — ${reason}`);
   } else if (targetProject) {
@@ -1983,7 +1997,19 @@ async function resolveDirectRow(raw, stmtDate, targetProject) {
     return null;
   }
   const members = getRowMembers({projectId});
-  if (raw.payerName) {
+  // A payerId column holds real member IDs (our own addExpense export uses these, not names) —
+  // match it directly against memberId and never against .name. payerName is the friendly-name
+  // column and is matched by name as before. An explicit payerId wins if both are present.
+  if (raw.payerIdRaw) {
+    const m = members.find(mm=>mm.memberId===raw.payerIdRaw);
+    if (m) { row.payerId = m.memberId; row.payerName = m.name; }
+    else {
+      const reason = `payer id '${raw.payerIdRaw}' not found in project '${projectName}'`;
+      reasons.push(reason);
+      console.log(`Direct-parse: row "${row.itemName}" needs input — ${reason}`);
+      row.payerId = members[0]?.memberId||""; row.payerName = members[0]?.name||"";
+    }
+  } else if (raw.payerName) {
     const m = members.find(mm=>mm.name.toLowerCase()===raw.payerName.trim().toLowerCase());
     if (m) { row.payerId = m.memberId; row.payerName = m.name; }
     else {
@@ -2000,15 +2026,19 @@ async function resolveDirectRow(raw, stmtDate, targetProject) {
     row.payerId = ""; row.payerName = ""; // falls back to the batch's global import payer at save/render time
   }
   if (raw.splitNames) {
-    const names = raw.splitNames.split(/[;,]/).map(s=>s.trim()).filter(Boolean);
-    const matched = names.map(n=>members.find(mm=>mm.name.toLowerCase()===n.toLowerCase())).filter(Boolean);
-    const unmatched = names.filter(n=>!members.some(mm=>mm.name.toLowerCase()===n.toLowerCase()));
+    // Each token may be a real memberId (our own export format) or a display name (manual
+    // paste) — try memberId first so a token that happens to look like a name never matches
+    // the wrong member, then fall back to a case-insensitive name match.
+    const tokens = raw.splitNames.split(/[;,]/).map(s=>s.trim()).filter(Boolean);
+    const resolveToken = t => members.find(mm=>mm.memberId===t) || members.find(mm=>mm.name.toLowerCase()===t.toLowerCase());
+    const matched = tokens.map(resolveToken).filter(Boolean);
+    const unmatched = tokens.filter(t=>!resolveToken(t));
     if (unmatched.length) {
       const reason = `split '${unmatched.join(", ")}' not found in project '${projectName}'`;
       reasons.push(reason);
       console.log(`Direct-parse: row "${row.itemName}" needs input — ${reason}`);
     }
-    row.splitMembers = matched.length ? matched.map(m=>m.memberId) : members.map(m=>m.memberId);
+    row.splitMembers = matched.length ? [...new Set(matched.map(m=>m.memberId))] : members.map(m=>m.memberId);
   } else {
     row.splitMembers = members.map(m=>m.memberId);
   }
@@ -2080,13 +2110,15 @@ async function parseDirectHeaderCsv(text, stmtDate, delimiter=",") {
       category: headerMap.category!==undefined ? cols[headerMap.category] : "",
       expenseDate: headerMap.expenseDate!==undefined ? cols[headerMap.expenseDate] : "",
       payerName: headerMap.payer!==undefined ? cols[headerMap.payer] : "",
+      payerIdRaw: headerMap.payerId!==undefined ? (cols[headerMap.payerId]||"").trim() : "",
       splitNames: headerMap.splitBetween!==undefined ? cols[headerMap.splitBetween] : "",
       projectName: headerMap.project!==undefined ? cols[headerMap.project] : "",
+      projectIdRaw: headerMap.projectId!==undefined ? (cols[headerMap.projectId]||"").trim() : "",
       notes: headerMap.notes!==undefined ? cols[headerMap.notes] : "",
     });
   }
-  // Resolve each unique projectName in the file ONCE up front (not per row) and warm the
-  // members+categories cache for it, so every row referencing that project reuses one fetch.
+  // Resolve each unique projectName/projectId in the file ONCE up front (not per row) and warm
+  // the members+categories cache for it, so every row referencing that project reuses one fetch.
   const uniqueProjectNames = [...new Set(rawRows.map(r=>r.projectName).filter(Boolean))];
   const projectByName = {};
   for (const pname of uniqueProjectNames) {
@@ -2100,12 +2132,26 @@ async function parseDirectHeaderCsv(text, stmtDate, delimiter=",") {
       }
     }
   }
+  const uniqueProjectIds = [...new Set(rawRows.map(r=>r.projectIdRaw).filter(Boolean))];
+  const projectById = {};
+  for (const pid of uniqueProjectIds) {
+    const proj = (allProjectsCache||[]).find(p=>!p.archived && p.projectId===pid);
+    projectById[pid] = proj || null;
+    if (proj) {
+      const ok = await ensureRowContext(proj.projectId);
+      if (!ok) {
+        console.error(`Direct-parse: could not load project id '${pid}' — aborting direct-parse for this file`);
+        return null;
+      }
+    }
+  }
   const results = [];
   const debugRows = [];
   for (let i=0;i<rawRows.length;i++) {
     const raw = rawRows[i];
-    const targetProject = raw.projectName ? projectByName[raw.projectName] : null;
-    console.log("Row", i, "projectName:", raw.projectName||"(none)", "→ matched:", targetProject?.name || "NONE (fallback to current)");
+    // An explicit projectId column wins over a projectName column when both are present.
+    const targetProject = (raw.projectIdRaw ? projectById[raw.projectIdRaw] : null) || (raw.projectName ? projectByName[raw.projectName] : null);
+    console.log("Row", i, "projectIdRaw:", raw.projectIdRaw||"(none)", "projectName:", raw.projectName||"(none)", "→ matched:", targetProject?.name || "NONE (fallback to current)");
     const resolved = await resolveDirectRow(raw, stmtDate, targetProject);
     if (!resolved) {
       // Hard failure (e.g. getProject fetch failed) — resolveDirectRow already logged why.
@@ -2113,7 +2159,8 @@ async function parseDirectHeaderCsv(text, stmtDate, delimiter=",") {
       return null;
     }
     results.push(resolved);
-    debugRows.push({item: raw.itemName, fileProject: raw.projectName||"(current)", resolvedProject: resolved.needsInputReason && raw.projectName && !targetProject ? "NEEDS INPUT" : resolved.projectId});
+    const projectRef = raw.projectIdRaw||raw.projectName;
+    debugRows.push({item: raw.itemName, fileProject: projectRef||"(current)", resolvedProject: resolved.needsInputReason && projectRef && !targetProject ? "NEEDS INPUT" : resolved.projectId});
   }
   const counts = {};
   results.forEach(r=>{ counts[r.projectId] = (counts[r.projectId]||0)+1; });
@@ -2765,7 +2812,13 @@ function renderImportRow(row, i, projs) {
   const categories = getRowCategories(row);
   const rowBg = dup ? 'var(--accent-lt)' : (!row.autoFilled ? '#fbf3e0' : 'transparent');
   const dupNote = dup ? `<div style="font-size:9px;color:var(--accent);margin-top:2px;cursor:help" title="Matches &quot;${esc(dup.itemName)}&quot; — ${formatAmt(dup.amount)} ${dup.currency||state.currency} on ${fmtDate(dup.expenseDate||dup.createdAt)}">⚠ possible duplicate</div>` : "";
-  const currencyOpts = ["HKD","SGD","USD","EUR","GBP","JPY","AUD","CAD","CNY","THB","MYR"].map(c=>`<option${c===row.currency?" selected":""}>${c}</option>`).join("");
+  // If the row's currency isn't in this hardcoded list (e.g. a real import currency this list
+  // never anticipated), still show it correctly instead of letting the <select> silently default
+  // to displaying the first option — that visual mismatch is not the same as the data being wrong,
+  // but it's confusing enough to look exactly like the bug it isn't.
+  const commonCurrencies = ["HKD","SGD","USD","EUR","GBP","JPY","AUD","CAD","CNY","THB","MYR"];
+  const currencyList = (row.currency && !commonCurrencies.includes(row.currency)) ? [row.currency, ...commonCurrencies] : commonCurrencies;
+  const currencyOpts = currencyList.map(c=>`<option${c===row.currency?" selected":""}>${c}</option>`).join("");
   const projCell = projs.length > 1
     ? `<select style="width:100px;font-size:11px;padding:4px" onchange="onImportRowProjectChange(${i},this.value)">${projs.map(p=>`<option value="${esc(p.projectId)}"${p.projectId===(row.projectId||state.projectId)?" selected":""}>${esc(p.name)}</option>`).join("")}</select>`
     : `<span style="font-size:11px;color:#888">${esc(state.project?.name||"")}</span>`;
